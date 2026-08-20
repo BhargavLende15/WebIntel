@@ -1,0 +1,16 @@
+-r requirements.txt
+
+# Phase 2 – Website analysis
+beautifulsoup4==4.12.3
+playwright==1.47.0
+
+# Phase 4 – AI
+google-generativeai==0.8.3
+
+# Phase 6 – Predictive analytics
+scikit-learn==1.5.2
+numpy==2.1.1
+
+# Phase 7 – Reports
+reportlab==4.2.5
+jinja2==3.1.4

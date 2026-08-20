@@ -1,0 +1,1 @@
+"""WebIntel backend application."""
