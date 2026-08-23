@@ -31,5 +31,7 @@ class AnalysisResponse(BaseModel):
     mobile_data: dict | None = None
     content_data: dict | None = None
     ai_readiness_data: dict | None = None
+    raw_metrics: dict | None = None
+    error_message: str | None = None
     created_at: datetime
     completed_at: datetime | None = None
