@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = ["http://localhost:5173"]
     SECRET_KEY: str = "change-me-in-production"
     LOG_LEVEL: str = "INFO"
+    MAX_CRAWL_PAGES: int = 10
+    FETCH_TIMEOUT_SECONDS: float = 15.0
+    CRAWL_MAX_RUNTIME_SECONDS: int = 180
+    USER_AGENT: str = "WebIntelBot/1.0 (+https://webintel.example.com/bot)"
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

@@ -1,8 +1,9 @@
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy.orm import Session
 
+from app.analysis.engine import run_analysis
 from app.api.deps import create_placeholder_website, get_analysis_or_404, get_db_session
 from app.models import AnalysisResult
 from app.schemas.analysis import AnalysisResponse, AnalyzeRequest, AnalyzeResponse
@@ -13,6 +14,7 @@ router = APIRouter(tags=["Analysis"])
 @router.post("/analyze", response_model=AnalyzeResponse, status_code=202)
 async def analyze_website(
     payload: AnalyzeRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db_session),
 ) -> AnalyzeResponse:
     """Queue a website for digital readiness analysis."""
@@ -33,8 +35,10 @@ async def analyze_website(
     db.commit()
     db.refresh(analysis)
 
+    background_tasks.add_task(run_analysis, analysis.id)
+
     return AnalyzeResponse(
-        message="Analysis queued successfully. Full analysis available in Phase 2.",
+        message="Analysis queued successfully.",
         analysis_id=analysis.id,
         website_id=website.id,
         status=analysis.status,
