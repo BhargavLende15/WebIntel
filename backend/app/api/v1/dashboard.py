@@ -3,8 +3,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_analysis_or_404, get_db_session
-from app.models import AnalysisResult, Score
+from app.api.deps import get_db_session, get_owned_analysis_or_404
+from app.api.v1.auth import get_current_user
+from app.models import AnalysisResult, Project, Score, User, Website
 from app.schemas.dashboard import DashboardMetric, DashboardResponse
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
@@ -76,12 +77,15 @@ def _dashboard_response(analysis: AnalysisResult, db: Session) -> DashboardRespo
 @router.get("/latest", response_model=DashboardResponse)
 def get_latest_dashboard(
     db: Session = Depends(get_db_session),
+    user: User = Depends(get_current_user),
 ) -> DashboardResponse:
     """Return dashboard data for the most recently completed analysis."""
     analysis = (
         db.query(AnalysisResult)
         .join(Score, Score.analysis_id == AnalysisResult.id)
-        .filter(AnalysisResult.status == "completed")
+        .join(Website, AnalysisResult.website_id == Website.id)
+        .join(Project, Website.project_id == Project.id)
+        .filter(AnalysisResult.status == "completed", Project.user_id == user.id)
         .order_by(AnalysisResult.completed_at.desc(), AnalysisResult.created_at.desc())
         .first()
     )
@@ -99,7 +103,8 @@ def get_latest_dashboard(
 def get_dashboard(
     analysis_id: UUID,
     db: Session = Depends(get_db_session),
+    user: User = Depends(get_current_user),
 ) -> DashboardResponse:
     """Retrieve dashboard data for a specific completed analysis."""
-    analysis = get_analysis_or_404(analysis_id, db)
+    analysis = get_owned_analysis_or_404(analysis_id, user, db)
     return _dashboard_response(analysis, db)

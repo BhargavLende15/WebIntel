@@ -1,10 +1,11 @@
-from uuid import uuid4
+﻿from uuid import uuid4
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db_session, get_website_or_404
-from app.models import MonitoringJob
+from app.api.deps import get_db_session, get_owned_website_or_404
+from app.api.v1.auth import get_current_user
+from app.models import MonitoringJob, User
 from app.schemas.monitor import MonitorRequest, MonitorResponse
 
 router = APIRouter(prefix="/monitor", tags=["Monitoring"])
@@ -14,9 +15,10 @@ router = APIRouter(prefix="/monitor", tags=["Monitoring"])
 async def setup_monitoring(
     payload: MonitorRequest,
     db: Session = Depends(get_db_session),
+    user: User = Depends(get_current_user),
 ) -> MonitorResponse:
-    """Configure continuous monitoring for a website."""
-    website = get_website_or_404(payload.website_id, db)
+    """Configure monitoring only for an owned website."""
+    website = get_owned_website_or_404(payload.website_id, user, db)
 
     job = MonitoringJob(
         id=uuid4(),

@@ -4,6 +4,15 @@ import Button from '../components/ui/Button';
 import Card, { CardHeader } from '../components/ui/Card';
 import { PageWrapper } from '../layouts/MainLayout';
 import { getLatestDashboard } from '../services/api';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+} from 'recharts';
 
 const categories = [
   { key: 'performance', name: 'Performance', weight: '20%' },
@@ -191,12 +200,52 @@ export default function DashboardPage() {
           <div className="grid gap-6 lg:grid-cols-2">
             <Card>
               <CardHeader
-                title="Score Trends"
-                subtitle="Historical trend data"
+                title="Category Score Comparison"
+                subtitle="Scores from the latest saved assessment"
               />
-              <p className="text-sm text-slate-500">
-                Historical trend data is not available from this dashboard response yet.
-                No trend values are fabricated.
+              {categories.some((category) =>
+                typeof categoryScores[category.key] === 'number' &&
+                Number.isFinite(categoryScores[category.key])
+              ) ? (
+                <div className="mt-2 h-72 w-full" role="img" aria-label="Bar chart comparing measured website readiness categories">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={categories
+                        .filter((category) =>
+                          typeof categoryScores[category.key] === 'number' &&
+                          Number.isFinite(categoryScores[category.key])
+                        )
+                        .map((category) => ({
+                          category: category.name,
+                          score: Math.max(0, Math.min(100, categoryScores[category.key])),
+                        }))}
+                      margin={{ top: 8, right: 8, left: -18, bottom: 8 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        dataKey="category"
+                        tick={{ fontSize: 11 }}
+                        interval={0}
+                        angle={-20}
+                        textAnchor="end"
+                        height={64}
+                      />
+                      <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
+                      <Tooltip
+                        formatter={(value) => [`${Number(value).toFixed(1)}/100`, 'Score']}
+                      />
+                      <Bar dataKey="score" name="Score" fill="#2563eb" radius={[5, 5, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">
+                  No category scores are available to chart for this assessment.
+                </p>
+              )}
+              <p className="mt-3 text-xs leading-5 text-slate-500">
+                These bars compare measured categories, not performance over time.
+                Historical trends will be shown when saved historical assessments are available.
               </p>
             </Card>
 
@@ -209,6 +258,24 @@ export default function DashboardPage() {
                 {dashboard.explanation ||
                   'This score is a heuristic assessment based on the available measurements.'}
               </p>
+              <div className="mt-4 rounded-xl bg-slate-50 p-4 dark:bg-slate-800/70">
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  How to read these scores
+                </h3>
+                <ul className="mt-2 space-y-2 text-sm text-slate-600 dark:text-slate-300">
+                  <li><strong>Performance:</strong> signals related to page loading and technical efficiency.</li>
+                  <li><strong>SEO:</strong> crawlability and on-page search engine signals.</li>
+                  <li><strong>Accessibility:</strong> checks for barriers that may affect people using the website.</li>
+                  <li><strong>Security:</strong> observable transport and security configuration signals.</li>
+                  <li><strong>AI Readiness:</strong> signals that help automated systems interpret site content.</li>
+                  <li><strong>Content Quality:</strong> structural and content signals measured by the analyzer.</li>
+                  <li><strong>Mobile Experience:</strong> checks relevant to mobile usability and layout.</li>
+                </ul>
+                <p className="mt-3 text-xs leading-5 text-slate-500">
+                  Interpret each score alongside measurement coverage. A missing score means
+                  the category was not measured; it should not be treated as zero.
+                </p>
+              </div>
               {dashboard.analysis_id && (
                 <p className="mt-4 break-all text-xs text-slate-500">
                   Analysis ID: {dashboard.analysis_id}

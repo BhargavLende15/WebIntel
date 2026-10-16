@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends
+﻿from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db_session, get_website_or_404
+from app.api.deps import get_db_session, get_owned_website_or_404
+from app.api.v1.auth import get_current_user
+from app.models import User
 from app.schemas.predict import PredictRequest, PredictResponse
 
 router = APIRouter(prefix="/predict", tags=["Predictive Analytics"])
@@ -11,9 +13,10 @@ router = APIRouter(prefix="/predict", tags=["Predictive Analytics"])
 async def predict_score(
     payload: PredictRequest,
     db: Session = Depends(get_db_session),
+    user: User = Depends(get_current_user),
 ) -> PredictResponse:
-    """Predict future Digital Readiness Score using ML models."""
-    website = get_website_or_404(payload.website_id, db)
+    """Predict future readiness only for an owned website."""
+    website = get_owned_website_or_404(payload.website_id, user, db)
 
     return PredictResponse(
         website_id=website.id,
