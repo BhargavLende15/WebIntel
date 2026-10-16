@@ -22,6 +22,8 @@ export const getRecommendations = (analysisId) =>
 
 export const getDashboard = (id) => api.get(`/dashboard/${id}`);
 
+export const getLatestDashboard = () => api.get('/dashboard/latest');
+
 export const sendChatMessage = (payload) => api.post('/chat', payload);
 
 export const predictScore = (websiteId, horizonDays = 30) =>
