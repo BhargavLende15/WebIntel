@@ -8,13 +8,13 @@ class ScoreRequest(BaseModel):
 
 
 class CategoryScores(BaseModel):
-    performance: float = 0.0
-    seo: float = 0.0
-    accessibility: float = 0.0
-    security: float = 0.0
-    ai_readiness: float = 0.0
-    content_quality: float = 0.0
-    mobile_experience: float = 0.0
+    performance: float | None = None
+    seo: float | None = None
+    accessibility: float | None = None
+    security: float | None = None
+    ai_readiness: float | None = None
+    content_quality: float | None = None
+    mobile_experience: float | None = None
 
 
 class ScoreResponse(BaseModel):
