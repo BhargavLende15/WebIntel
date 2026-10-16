@@ -1,4 +1,4 @@
-from uuid import UUID
+﻿from uuid import UUID
 
 from pydantic import BaseModel
 
@@ -11,9 +11,14 @@ class DashboardMetric(BaseModel):
 
 class DashboardResponse(BaseModel):
     analysis_id: UUID
+    website_id: UUID
     overall_score: float
     grade: str
-    category_scores: dict[str, float]
+    confidence: float
+    explanation: str | None = None
+    category_scores: dict[str, float | None]
     metrics: list[DashboardMetric]
     charts: dict[str, list[dict]]
     phase: str = "Phase 5 - Business Intelligence Dashboard"
+
+

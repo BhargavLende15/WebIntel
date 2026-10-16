@@ -6,7 +6,8 @@ from uuid import UUID
 
 from app.analysis import accessibility, ai_readiness, content, mobile, performance, security, seo
 from app.database.session import SessionLocal
-from app.models import AnalysisResult
+from app.models import AnalysisResult, Score
+from app.scoring.engine import calculate_score as calculate_readiness_score
 from app.services.crawler import CrawlResult, crawl_site
 from app.services.fetcher import build_client
 from app.utils.config import settings
@@ -114,6 +115,46 @@ def run_analysis(analysis_id: UUID) -> None:
         analysis.website.last_analyzed_at = datetime.now(timezone.utc)
         db.commit()
         logger.info("Analysis %s completed in %.0f ms (%s pages)", analysis_id, duration_ms, len(crawl.pages))
+        # Automatically calculate and persist the score after successful analysis.
+        try:
+            result = calculate_readiness_score(analysis)
+
+            score = (
+                db.query(Score)
+                .filter(Score.analysis_id == analysis.id)
+                .first()
+            )
+            if score is None:
+                score = Score(analysis_id=analysis.id)
+                db.add(score)
+
+            score.overall_score = result.overall_score
+            score.grade = result.grade
+            score.confidence = result.confidence
+            score.category_scores = result.category_scores
+            score.explanation = result.explanation
+
+            db.commit()
+            logger.info(
+                "Readiness score saved for analysis %s: %.1f (%s), coverage %.0f%%",
+                analysis_id,
+                result.overall_score,
+                result.grade,
+                result.confidence * 100,
+            )
+        except ValueError as scoring_error:
+            db.rollback()
+            logger.warning(
+                "Analysis %s completed, but could not be scored: %s",
+                analysis_id,
+                scoring_error,
+            )
+        except Exception:
+            db.rollback()
+            logger.exception(
+                "Analysis %s completed, but saving its readiness score failed",
+                analysis_id,
+            )
     except Exception as exc:
         db.rollback()
         try:
@@ -131,6 +172,5 @@ def run_analysis(analysis_id: UUID) -> None:
 
 
 def _format_error(exc: Exception) -> str:
-    tb = traceback.format_exc()
-    message = f"{type(exc).__name__}: {exc}\n{tb}"
-    return message[:MAX_ERROR_MESSAGE_LENGTH]
+    """Return a client-safe message; detailed diagnostics are logged separately."""
+    return "Analysis failed. Check the URL and try again."

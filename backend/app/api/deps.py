@@ -1,4 +1,4 @@
-from collections.abc import Generator
+﻿from collections.abc import Generator
 from urllib.parse import urlparse
 from uuid import UUID, uuid4
 
@@ -6,7 +6,7 @@ from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
-from app.models import AnalysisResult, Website
+from app.models import AnalysisResult, Project, User, Website
 
 
 def get_db_session() -> Generator[Session, None, None]:
@@ -38,7 +38,26 @@ def get_website_or_404(website_id: UUID, db: Session) -> Website:
     return website
 
 
-def create_placeholder_website(url: str, db: Session, project_id: UUID | None = None) -> Website:
+def get_owned_website_or_404(
+    website_id: UUID, user: User, db: Session
+) -> Website:
+    website = (
+        db.query(Website)
+        .join(Project, Website.project_id == Project.id)
+        .filter(Website.id == website_id, Project.user_id == user.id)
+        .first()
+    )
+    if website is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Website not found",
+        )
+    return website
+
+
+def create_placeholder_website(
+    url: str, db: Session, project_id: UUID | None = None
+) -> Website:
     domain = extract_domain(url)
     website = Website(
         id=uuid4(),
@@ -50,3 +69,24 @@ def create_placeholder_website(url: str, db: Session, project_id: UUID | None = 
     db.add(website)
     db.flush()
     return website
+
+
+def get_owned_analysis_or_404(
+    analysis_id: UUID, user: User, db: Session
+) -> AnalysisResult:
+    analysis = (
+        db.query(AnalysisResult)
+        .join(Website, AnalysisResult.website_id == Website.id)
+        .join(Project, Website.project_id == Project.id)
+        .filter(
+            AnalysisResult.id == analysis_id,
+            Project.user_id == user.id,
+        )
+        .first()
+    )
+    if analysis is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Analysis not found",
+        )
+    return analysis

@@ -1,8 +1,30 @@
-import pytest
+﻿import pytest
 from conftest import MINIMAL_HTML, SAMPLE_HTML, make_fetch, make_robots
 from app.services.fetcher import FetchResult
 
 from app.services import crawler
+from app.services.fetcher import validate_fetch_url
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://127.0.0.1/",
+        "http://10.0.0.1/",
+        "http://192.168.1.1/",
+        "http://169.254.169.254/",
+        "http://localhost/",
+        "http://service.localhost/",
+        "file:///etc/passwd",
+        "https://user:password@example.com/",
+    ],
+)
+def test_validate_fetch_url_rejects_unsafe_targets(url):
+    assert validate_fetch_url(url) is not None
+
+
+def test_validate_fetch_url_accepts_public_http_url():
+    assert validate_fetch_url("https://example.com/path") is None
 
 
 @pytest.fixture
@@ -196,3 +218,175 @@ def test_robots_txt_redirect_followed(fake_fetch):
 
     assert result.robots.fetched is True
     assert result.robots.text == robots_html
+
+def test_fetch_page_validates_redirect_targets(monkeypatch):
+    import socket
+    import httpx
+    from app.services import fetcher
+
+    monkeypatch.setattr(
+        fetcher,
+        "_validate_public_dns",
+        lambda host: None if host == "example.com" else "Hostname resolves to a non-public IP address.",
+    )
+
+    class FakeResponse:
+        def __init__(self, url, status_code, headers=None, body=b""):
+            self.url = httpx.URL(url)
+            self.status_code = status_code
+            self.headers = headers or {}
+            self.encoding = "utf-8"
+            self.closed = False
+            self.body = body
+
+        def iter_bytes(self):
+            yield self.body
+
+        def close(self):
+            self.closed = True
+
+    class FakeClient:
+        def __init__(self, responses):
+            self.responses = iter(responses)
+            self.requested = []
+
+        def build_request(self, method, url):
+            return httpx.Request(method, url)
+
+        def send(self, request, stream=True, follow_redirects=False):
+            self.requested.append(str(request.url))
+            return next(self.responses)
+
+    client = FakeClient([
+        FakeResponse("https://example.com/", 302, {"location": "https://127.0.0.1/private"}),
+    ])
+    result = fetcher.fetch_page(client, "https://example.com/")
+
+    assert result.error == "Non-public IP addresses are not allowed."
+    assert client.requested == ["https://example.com/"]
+
+
+def test_fetch_page_follows_validated_redirect(monkeypatch):
+    import httpx
+    from app.services import fetcher
+
+    monkeypatch.setattr(fetcher, "_validate_public_dns", lambda host: None)
+
+    class FakeResponse:
+        def __init__(self, url, status_code, headers=None, body=b""):
+            self.url = httpx.URL(url)
+            self.status_code = status_code
+            self.headers = headers or {}
+            self.encoding = "utf-8"
+            self.body = body
+            self.closed = False
+
+        def iter_bytes(self):
+            yield self.body
+
+        def close(self):
+            self.closed = True
+
+    class FakeClient:
+        def __init__(self):
+            self.requested = []
+            self.responses = [
+                FakeResponse("https://example.com/", 302, {"location": "/final"}),
+                FakeResponse(
+                    "https://example.com/final",
+                    200,
+                    {"content-type": "text/html; charset=utf-8"},
+                    b"<html>ok</html>",
+                ),
+            ]
+
+        def build_request(self, method, url):
+            return httpx.Request(method, url)
+
+        def send(self, request, stream=True, follow_redirects=False):
+            self.requested.append(str(request.url))
+            return self.responses.pop(0)
+
+    client = FakeClient()
+    result = fetcher.fetch_page(client, "https://example.com/")
+
+    assert result.ok
+    assert result.final_url == "https://example.com/final"
+    assert result.html == "<html>ok</html>"
+    assert client.requested == [
+        "https://example.com/",
+        "https://example.com/final",
+    ]
+
+
+def test_fetch_page_rejects_redirect_without_location(monkeypatch):
+    import httpx
+    from app.services import fetcher
+
+    monkeypatch.setattr(fetcher, "_validate_public_dns", lambda host: None)
+
+    class FakeResponse:
+        url = httpx.URL("https://example.com/")
+        status_code = 302
+        headers = {}
+        closed = False
+
+        def close(self):
+            self.closed = True
+
+    class FakeClient:
+        def build_request(self, method, url):
+            return httpx.Request(method, url)
+
+        def send(self, request, stream=True, follow_redirects=False):
+            return FakeResponse()
+
+    result = fetcher.fetch_page(FakeClient(), "https://example.com/")
+    assert result.error == "Redirect response has no Location header."
+
+
+def test_fetch_page_retries_transient_timeout(monkeypatch):
+    from app.services import fetcher
+
+    attempts = []
+    successful = FetchResult(
+        url="https://example.com/",
+        final_url="https://example.com/",
+        status_code=200,
+        content_type="text/html",
+        html="<html>recovered</html>",
+    )
+
+    def fake_fetch(client, url):
+        attempts.append(url)
+        if len(attempts) == 1:
+            return FetchResult(url=url, error="ReadTimeout: timed out")
+        return successful
+
+    monkeypatch.setattr(fetcher, "_fetch_page_once", fake_fetch)
+    monkeypatch.setattr(fetcher.time, "sleep", lambda seconds: None)
+
+    result = fetcher.fetch_page(None, "https://example.com/")
+
+    assert result.ok
+    assert result.html == "<html>recovered</html>"
+    assert len(attempts) == 2
+
+
+def test_fetch_page_returns_persistent_timeout(monkeypatch):
+    from app.services import fetcher
+
+    attempts = []
+
+    def fake_fetch(client, url):
+        attempts.append(url)
+        return FetchResult(url=url, error="ReadTimeout: timed out")
+
+    monkeypatch.setattr(fetcher, "_fetch_page_once", fake_fetch)
+    monkeypatch.setattr(fetcher.time, "sleep", lambda seconds: None)
+
+    result = fetcher.fetch_page(None, "https://example.com/")
+
+    assert not result.ok
+    assert "ReadTimeout" in result.error
+    assert len(attempts) == 2

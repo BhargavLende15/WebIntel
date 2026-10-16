@@ -130,7 +130,14 @@ def crawl_site(
     deadline = time.monotonic() + settings.CRAWL_MAX_RUNTIME_SECONDS
     owns_client = client is None
     client = client or build_client()
+    try:
+        return _crawl_site(start_url, max_pages, client, robots, deadline)
+    finally:
+        if owns_client:
+            client.close()
 
+
+def _crawl_site(start_url, max_pages, client, robots, deadline):
     normalized_start = normalize_url(start_url)
     if normalized_start is None:
         raise ValueError(f"Invalid start URL: {start_url}")
@@ -197,6 +204,4 @@ def crawl_site(
 
     result.discovered_count = len(enqueued)
     result.max_pages_reached = len(result.pages) >= max_pages
-    if owns_client:
-        client.close()
     return result

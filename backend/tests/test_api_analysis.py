@@ -19,8 +19,37 @@ CATEGORY_FIELDS = [
 
 
 @pytest.fixture()
-def api_client():
+def api_client(monkeypatch):
+    from uuid import uuid4
+    from app.utils.config import settings
+
+    monkeypatch.setattr(
+        settings, "SECRET_KEY", "test-only-secret-key-not-for-production-123456"
+    )
+
     with TestClient(app) as test_client:
+        email = f"analysis-test-{uuid4().hex}@example.com"
+        password = f"Test-{uuid4().hex}-Secure!"
+
+        registered = test_client.post(
+            "/api/v1/auth/register",
+            json={
+                "email": email,
+                "password": password,
+                "full_name": "Analysis Test",
+            },
+        )
+        assert registered.status_code == 201, registered.text
+
+        login = test_client.post(
+            "/api/v1/auth/login",
+            json={"email": email, "password": password},
+        )
+        assert login.status_code == 200, login.text
+
+        test_client.headers.update(
+            {"Authorization": f"Bearer {login.json()['access_token']}"}
+        )
         yield test_client
 
 
@@ -70,7 +99,9 @@ def test_analyze_failure_marks_failed_with_error_message(api_client, monkeypatch
     data = result.json()
 
     assert data["status"] == "failed"
-    assert "connection refused" in data["error_message"]
+    assert data["error_message"] == "Analysis failed. Check the URL and try again."
+    assert "connection refused" not in data["error_message"]
+    assert "Traceback" not in data["error_message"]
     assert data["completed_at"] is not None
     assert all(data[field] is None for field in CATEGORY_FIELDS)
 

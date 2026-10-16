@@ -4,7 +4,7 @@ import Button from '../components/ui/Button';
 import Card, { CardHeader } from '../components/ui/Card';
 import { SkeletonCard } from '../components/ui/Skeleton';
 import { PageWrapper } from '../layouts/MainLayout';
-import { getAnalysis } from '../services/api';
+import { calculateScore, getAnalysis, getRecommendations } from '../services/api';
 
 const POLL_INTERVAL_MS = 3000;
 const TERMINAL_STATUSES = ['completed', 'failed'];
@@ -34,7 +34,7 @@ function humanizeKey(key) {
 
 function formatValue(value) {
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-  if (value === null || value === undefined || value === '') return '—';
+  if (value === null || value === undefined || value === '') return 'â€”';
   return String(value);
 }
 
@@ -68,11 +68,11 @@ function NestedList({ title, items }) {
       <ul className="space-y-1">
         {items.slice(0, 10).map((item, i) => (
           <li key={i} className="break-all text-xs text-slate-600 dark:text-slate-300">
-            • {typeof item === 'object' ? JSON.stringify(item) : item}
+            â€¢ {typeof item === 'object' ? JSON.stringify(item) : item}
           </li>
         ))}
         {items.length > 10 && (
-          <li className="text-xs italic text-slate-400">…and {items.length - 10} more</li>
+          <li className="text-xs italic text-slate-400">â€¦and {items.length - 10} more</li>
         )}
       </ul>
     </div>
@@ -107,6 +107,9 @@ export default function ResultsPage() {
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [score, setScore] = useState(null);
+  const [scoreLoading, setScoreLoading] = useState(false);
+  const [scoreError, setScoreError] = useState('');
   const timerRef = useRef(null);
 
   useEffect(() => {
@@ -136,6 +139,45 @@ export default function ResultsPage() {
       clearTimeout(timerRef.current);
     };
   }, [id]);
+
+  useEffect(() => {
+    if (analysis?.status !== 'completed') {
+      setScore(null);
+      setScoreError('');
+      setScoreLoading(false);
+      return;
+    }
+
+    let active = true;
+    setScoreLoading(true);
+    setScoreError('');
+
+    calculateScore(id)
+      .then(async ({ data }) => {
+        if (!active) return;
+        setScore(data);
+        await getRecommendations(id);
+        if (active) {
+          window.dispatchEvent(new Event('webintel:dashboard-refresh'));
+        }
+      })
+      .catch((err) => {
+        if (!active) return;
+        const detail = err.response?.data?.detail;
+        setScoreError(
+          typeof detail === 'string'
+            ? detail
+            : 'Unable to load the readiness score. Please refresh and try again.'
+        );
+      })
+      .finally(() => {
+        if (active) setScoreLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [id, analysis?.status]);
 
   if (loading) {
     return (
@@ -178,9 +220,111 @@ export default function ResultsPage() {
           {inProgress && (
             <span className="h-2 w-2 animate-pulse rounded-full bg-current" aria-hidden="true" />
           )}
-          {inProgress ? `Analyzing — ${status}` : status}
+          {inProgress ? `Analyzing â€” ${status}` : status}
         </span>
       </div>
+
+      {status === 'completed' && (
+        <Card className="mt-6">
+          {scoreLoading && (
+            <>
+              <CardHeader title="Web Readiness Score" subtitle="Loading saved assessment..." />
+              <div className="skeleton h-8 w-24" />
+            </>
+          )}
+
+          {!scoreLoading && scoreError && (
+            <>
+              <CardHeader title="Readiness Score Unavailable" />
+              <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+                {scoreError}
+              </p>
+            </>
+          )}
+
+          {!scoreLoading && !scoreError && score && (
+            <>
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <CardHeader
+                    title="Web Readiness Score"
+                    subtitle="Assessment based on the checks WebIntel completed"
+                  />
+                  <div className="mt-2 flex items-baseline gap-2">
+                    <span className="text-4xl font-bold text-slate-900 dark:text-white">
+                      {Number(score.overall_score).toFixed(1)}
+                    </span>
+                    <span className="text-sm text-slate-500 dark:text-slate-400">/ 100</span>
+                  </div>
+                </div>
+                <span className="rounded-xl bg-primary-50 px-4 py-2 text-lg font-semibold text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">
+                  Grade {score.grade}
+                </span>
+              </div>
+
+              {typeof score.confidence === 'number' && (
+                <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+                  Measurement coverage: {Math.round(score.confidence * 100)}%
+                </p>
+              )}
+
+              {score.explanation && (
+                <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                  {score.explanation}
+                </p>
+              )}
+
+              <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {[
+                  ['Performance', 'performance'],
+                  ['SEO', 'seo'],
+                  ['Accessibility', 'accessibility'],
+                  ['Security', 'security'],
+                  ['AI Readiness', 'ai_readiness'],
+                  ['Content Quality', 'content_quality'],
+                  ['Mobile Experience', 'mobile_experience'],
+                ]
+                  .filter(([, key]) => score.category_scores?.[key] != null)
+                  .map(([label, key]) => {
+                    const value = Number(score.category_scores[key]);
+                    const safeValue = Number.isFinite(value)
+                      ? Math.max(0, Math.min(100, value))
+                      : 0;
+
+                    return (
+                      <div key={key} className="rounded-xl bg-slate-50 p-4 dark:bg-slate-800/70">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm text-slate-600 dark:text-slate-300">{label}</span>
+                          <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                            {Number.isFinite(value) ? value.toFixed(1) : 'N/A'}
+                          </span>
+                        </div>
+                        <div
+                          className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
+                          role="progressbar"
+                          aria-label={`${label} score`}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-valuenow={safeValue}
+                        >
+                          <div
+                            className="h-full rounded-full bg-primary-500"
+                            style={{ width: `${safeValue}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+
+              <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">
+                This is WebIntel's heuristic assessment, not a Google ranking score or a guarantee
+                of search visibility. Results depend on crawl coverage and the checks available.
+              </p>
+            </>
+          )}
+        </Card>
+      )}
 
       {status === 'failed' && (
         <Card className="mb-6 border-red-200 dark:border-red-800">
@@ -229,3 +373,4 @@ export default function ResultsPage() {
     </PageWrapper>
   );
 }
+
