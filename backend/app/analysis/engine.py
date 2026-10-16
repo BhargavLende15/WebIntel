@@ -172,6 +172,5 @@ def run_analysis(analysis_id: UUID) -> None:
 
 
 def _format_error(exc: Exception) -> str:
-    tb = traceback.format_exc()
-    message = f"{type(exc).__name__}: {exc}\n{tb}"
-    return message[:MAX_ERROR_MESSAGE_LENGTH]
+    """Return a client-safe message; detailed diagnostics are logged separately."""
+    return "Analysis failed. Check the URL and try again."

@@ -70,7 +70,9 @@ def test_analyze_failure_marks_failed_with_error_message(api_client, monkeypatch
     data = result.json()
 
     assert data["status"] == "failed"
-    assert "connection refused" in data["error_message"]
+    assert data["error_message"] == "Analysis failed. Check the URL and try again."
+    assert "connection refused" not in data["error_message"]
+    assert "Traceback" not in data["error_message"]
     assert data["completed_at"] is not None
     assert all(data[field] is None for field in CATEGORY_FIELDS)
 
