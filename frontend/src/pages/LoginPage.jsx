@@ -1,11 +1,12 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
-import { login, TOKEN_KEY } from '../services/api';
+import { useAuth } from '../context/useAuth';
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -17,8 +18,8 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await login(email.trim(), password);
-      window.localStorage.setItem(TOKEN_KEY, response.data.access_token);
+      await signIn(email.trim(), password);
+
       navigate('/dashboard', { replace: true });
     } catch (err) {
       setError(
@@ -86,8 +87,9 @@ export default function LoginPage() {
         </Button>
       </form>
 
+      <p className="mt-4 text-center text-sm text-slate-500">New to WebIntel? <Link className="font-medium text-primary-600 hover:underline" to="/register">Create an account</Link></p>
       <p className="mt-4 text-center text-xs text-slate-500 dark:text-slate-400">
-        Your account must already exist. Registration is available through the API.
+        Sign in with your WebIntel account to continue.
       </p>
       <p className="mt-4 text-center text-sm text-slate-500">
         <Link className="text-primary-600 hover:underline" to="/">

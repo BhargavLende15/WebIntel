@@ -89,7 +89,7 @@ def _validate_public_dns(host: str) -> str | None:
     return None
 
 
-def fetch_page(client: httpx.Client, url: str) -> FetchResult:
+def _fetch_page_once(client: httpx.Client, url: str) -> FetchResult:
     """Fetch HTML with bounded bodies and validated manual redirects."""
     current_url = url
     start = time.perf_counter()
@@ -165,3 +165,29 @@ def fetch_page(client: httpx.Client, url: str) -> FetchResult:
                 response.close()
 
     return FetchResult(url=url, error="Too many redirects.")
+
+
+def fetch_page(client: httpx.Client, url: str) -> FetchResult:
+    """Retry a page once after transient network failures."""
+    transient_errors = {
+        "ReadTimeout",
+        "ConnectTimeout",
+        "WriteTimeout",
+        "PoolTimeout",
+        "TimeoutException",
+        "ConnectError",
+        "ReadError",
+        "WriteError",
+        "RemoteProtocolError",
+    }
+
+    result = _fetch_page_once(client, url)
+    error_type = (result.error or "").split(":", 1)[0]
+
+    if error_type not in transient_errors:
+        return result
+
+    time.sleep(0.25)
+    retry_result = _fetch_page_once(client, url)
+
+    return retry_result

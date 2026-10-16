@@ -4,7 +4,7 @@ import Button from '../components/ui/Button';
 import Card, { CardHeader } from '../components/ui/Card';
 import { SkeletonCard } from '../components/ui/Skeleton';
 import { PageWrapper } from '../layouts/MainLayout';
-import { calculateScore, getAnalysis } from '../services/api';
+import { calculateScore, getAnalysis, getRecommendations } from '../services/api';
 
 const POLL_INTERVAL_MS = 3000;
 const TERMINAL_STATUSES = ['completed', 'failed'];
@@ -34,7 +34,7 @@ function humanizeKey(key) {
 
 function formatValue(value) {
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-  if (value === null || value === undefined || value === '') return '—';
+  if (value === null || value === undefined || value === '') return 'â€”';
   return String(value);
 }
 
@@ -68,11 +68,11 @@ function NestedList({ title, items }) {
       <ul className="space-y-1">
         {items.slice(0, 10).map((item, i) => (
           <li key={i} className="break-all text-xs text-slate-600 dark:text-slate-300">
-            • {typeof item === 'object' ? JSON.stringify(item) : item}
+            â€¢ {typeof item === 'object' ? JSON.stringify(item) : item}
           </li>
         ))}
         {items.length > 10 && (
-          <li className="text-xs italic text-slate-400">…and {items.length - 10} more</li>
+          <li className="text-xs italic text-slate-400">â€¦and {items.length - 10} more</li>
         )}
       </ul>
     </div>
@@ -153,8 +153,13 @@ export default function ResultsPage() {
     setScoreError('');
 
     calculateScore(id)
-      .then(({ data }) => {
-        if (active) setScore(data);
+      .then(async ({ data }) => {
+        if (!active) return;
+        setScore(data);
+        await getRecommendations(id);
+        if (active) {
+          window.dispatchEvent(new Event('webintel:dashboard-refresh'));
+        }
       })
       .catch((err) => {
         if (!active) return;
@@ -215,7 +220,7 @@ export default function ResultsPage() {
           {inProgress && (
             <span className="h-2 w-2 animate-pulse rounded-full bg-current" aria-hidden="true" />
           )}
-          {inProgress ? `Analyzing — ${status}` : status}
+          {inProgress ? `Analyzing â€” ${status}` : status}
         </span>
       </div>
 
@@ -368,3 +373,4 @@ export default function ResultsPage() {
     </PageWrapper>
   );
 }
+

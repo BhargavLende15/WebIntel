@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import Card, { CardHeader } from '../components/ui/Card';
 import { PageWrapper } from '../layouts/MainLayout';
-import { getRecommendations } from '../services/api';
+import { getSavedRecommendations } from '../services/api';
 
 const PRIORITY_STYLES = {
   critical: 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300',
@@ -87,7 +87,7 @@ export default function RecommendationsPage() {
       setError('');
 
       try {
-        const { data } = await getRecommendations(id);
+        const { data } = await getSavedRecommendations(id);
         if (active) setItems(data.recommendations || []);
       } catch (err) {
         if (!active) return;

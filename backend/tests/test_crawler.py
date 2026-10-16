@@ -1,4 +1,4 @@
-import pytest
+﻿import pytest
 from conftest import MINIMAL_HTML, SAMPLE_HTML, make_fetch, make_robots
 from app.services.fetcher import FetchResult
 
@@ -343,3 +343,50 @@ def test_fetch_page_rejects_redirect_without_location(monkeypatch):
 
     result = fetcher.fetch_page(FakeClient(), "https://example.com/")
     assert result.error == "Redirect response has no Location header."
+
+
+def test_fetch_page_retries_transient_timeout(monkeypatch):
+    from app.services import fetcher
+
+    attempts = []
+    successful = FetchResult(
+        url="https://example.com/",
+        final_url="https://example.com/",
+        status_code=200,
+        content_type="text/html",
+        html="<html>recovered</html>",
+    )
+
+    def fake_fetch(client, url):
+        attempts.append(url)
+        if len(attempts) == 1:
+            return FetchResult(url=url, error="ReadTimeout: timed out")
+        return successful
+
+    monkeypatch.setattr(fetcher, "_fetch_page_once", fake_fetch)
+    monkeypatch.setattr(fetcher.time, "sleep", lambda seconds: None)
+
+    result = fetcher.fetch_page(None, "https://example.com/")
+
+    assert result.ok
+    assert result.html == "<html>recovered</html>"
+    assert len(attempts) == 2
+
+
+def test_fetch_page_returns_persistent_timeout(monkeypatch):
+    from app.services import fetcher
+
+    attempts = []
+
+    def fake_fetch(client, url):
+        attempts.append(url)
+        return FetchResult(url=url, error="ReadTimeout: timed out")
+
+    monkeypatch.setattr(fetcher, "_fetch_page_once", fake_fetch)
+    monkeypatch.setattr(fetcher.time, "sleep", lambda seconds: None)
+
+    result = fetcher.fetch_page(None, "https://example.com/")
+
+    assert not result.ok
+    assert "ReadTimeout" in result.error
+    assert len(attempts) == 2

@@ -1,4 +1,5 @@
-﻿from fastapi import APIRouter, Depends, HTTPException, status
+from uuid import UUID
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db_session, get_owned_analysis_or_404
@@ -13,6 +14,44 @@ from app.schemas.recommendation import (
 
 router = APIRouter(prefix="/recommendations", tags=["Recommendations"])
 
+
+
+
+@router.get("/{analysis_id}", response_model=RecommendationResponse)
+async def get_saved_recommendations(
+    analysis_id: UUID,
+    db: Session = Depends(get_db_session),
+    user: User = Depends(get_current_user),
+) -> RecommendationResponse:
+    """Return saved recommendations for an owned analysis without modifying data."""
+    analysis = get_owned_analysis_or_404(analysis_id, user, db)
+
+    saved = (
+        db.query(Recommendation)
+        .filter(Recommendation.analysis_id == analysis.id)
+        .order_by(Recommendation.created_at.asc(), Recommendation.issue.asc())
+        .all()
+    )
+
+    items = [
+        RecommendationItem(
+            issue=item.issue,
+            description=item.description,
+            why_it_matters=item.why_it_matters,
+            business_impact=item.business_impact,
+            priority=item.priority,
+            estimated_improvement=item.estimated_improvement,
+            difficulty=item.difficulty,
+            suggested_implementation=item.suggested_implementation,
+        )
+        for item in saved
+    ]
+
+    return RecommendationResponse(
+        analysis_id=analysis.id,
+        recommendations=items,
+        total_count=len(items),
+    )
 
 @router.post("", response_model=RecommendationResponse)
 async def generate_recommendations(

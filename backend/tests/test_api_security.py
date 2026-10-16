@@ -228,3 +228,18 @@ def test_other_user_cannot_reuse_chat_session(security_setup):
 
 
 
+from unittest.mock import AsyncMock
+
+import pytest
+
+from app.api.v1 import chat as chat_module
+
+
+@pytest.fixture(autouse=True)
+def mock_gemini_for_security_tests(monkeypatch):
+    """Keep security tests independent of external Gemini credentials."""
+    monkeypatch.setattr(
+        chat_module,
+        "generate_gemini_reply",
+        AsyncMock(return_value="Mock AI response for security test."),
+    )

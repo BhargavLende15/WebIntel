@@ -1,4 +1,4 @@
-﻿import axios from 'axios';
+import axios from 'axios';
 
 const TOKEN_KEY = 'webintel_access_token';
 
@@ -16,6 +16,16 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      window.localStorage.removeItem(TOKEN_KEY);
+      window.dispatchEvent(new Event('webintel:unauthorized'));
+    }
+    return Promise.reject(error);
+  },
+);
 export const login = (email, password) =>
   api.post('/auth/login', { email, password });
 
@@ -34,6 +44,8 @@ export const calculateScore = (analysisId) =>
   api.post('/score', { analysis_id: analysisId });
 export const getRecommendations = (analysisId) =>
   api.post('/recommendations', { analysis_id: analysisId });
+export const getSavedRecommendations = (analysisId) =>
+  api.get(`/recommendations/${analysisId}`);
 export const getDashboard = (id) => api.get(`/dashboard/${id}`);
 export const getLatestDashboard = () => api.get('/dashboard/latest');
 export const sendChatMessage = (payload) => api.post('/chat', payload);
