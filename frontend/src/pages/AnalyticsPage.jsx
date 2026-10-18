@@ -3,7 +3,9 @@ import { Link, useParams } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import Card, { CardHeader } from '../components/ui/Card';
 import { PageWrapper } from '../layouts/MainLayout';
+import { SkeletonBlock } from '../components/ui/Skeleton';
 import { getDashboard, getSavedRecommendations } from '../services/api';
+import { NOT_AVAILABLE, clampScore, humanizeKey, isNumericValue } from '../utils/format';
 import {
   Bar,
   BarChart,
@@ -38,17 +40,19 @@ const PRIORITIES = [
 ];
 
 function ScoreBar({ label, value }) {
-  const score = Number(value);
-  const valid = Number.isFinite(score) && score >= 0 && score <= 100;
+  // Number(null) and Number('') both evaluate to 0, which would render an
+  // unmeasured category as "0.0/100". Guard on the raw value first.
+  const valid = isNumericValue(value) && clampScore(value) >= 0 && Number(value) <= 100;
+  const score = valid ? clampScore(value) : 0;
 
   return (
     <div>
       <div className="mb-2 flex items-center justify-between gap-3">
-        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+        <span className="min-w-0 text-sm font-medium text-slate-700 dark:text-slate-300">
           {label}
         </span>
-        <span className="text-sm font-semibold tabular-nums text-slate-900 dark:text-white">
-          {valid ? `${score.toFixed(1)}/100` : 'Unavailable'}
+        <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-900 dark:text-white">
+          {valid ? `${score.toFixed(1)}/100` : NOT_AVAILABLE}
         </span>
       </div>
       <div
@@ -57,12 +61,15 @@ function ScoreBar({ label, value }) {
         aria-label={`${label} score`}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-valuenow={valid ? score : 0}
+        aria-valuenow={valid ? score : undefined}
+        aria-valuetext={valid ? `${score.toFixed(1)} out of 100` : NOT_AVAILABLE}
       >
-        <div
-          className="h-full rounded-full bg-primary-600 transition-all duration-500"
-          style={{ width: valid ? `${score}%` : '0%' }}
-        />
+        {valid && (
+          <div
+            className="h-full rounded-full bg-primary-600 transition-all duration-500"
+            style={{ width: `${score}%` }}
+          />
+        )}
       </div>
     </div>
   );
@@ -115,8 +122,8 @@ function PriorityBreakdown({ recommendations }) {
         );
       })}
       <p className="text-xs text-slate-500 dark:text-slate-400">
-        Distribution is calculated from the recommendations returned by WebIntel.
-        Items with other or missing priority labels are excluded from these four groups.
+        Distribution is calculated from the recommendations returned by WebIntel. Items with
+        other or missing priority labels are excluded from these four groups.
       </p>
     </div>
   );
@@ -135,6 +142,22 @@ function ChartEmptyState({ message }) {
   );
 }
 
+function ChartFrame({ height = 'h-72', label, children }) {
+  return (
+    <div
+      className={`${height} w-full min-w-0 rounded-xl bg-slate-50/60 p-2 dark:bg-slate-800/30`}
+      role="img"
+      aria-label={label}
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        {children}
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+const AXIS_TICK = { fontSize: 11, fill: 'currentColor' };
+
 function AssessmentTrendChart({ data }) {
   const points = Array.isArray(data)
     ? data.filter(
@@ -146,48 +169,48 @@ function AssessmentTrendChart({ data }) {
     : [];
 
   return (
-    <Card>
+    <Card className="flex h-full flex-col">
       <CardHeader
         title="Assessment trend"
         subtitle="Historical overall readiness for this website"
       />
       {points.length > 0 ? (
-        <div className="h-72 w-full" role="img" aria-label="Line chart of historical assessment scores">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={points} margin={{ top: 12, right: 12, left: -14, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis
-                dataKey="date"
-                tick={{ fontSize: 11 }}
-                tickFormatter={(value) => {
-                  const date = new Date(value);
-                  return Number.isNaN(date.getTime())
-                    ? value
-                    : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-                }}
-                minTickGap={24}
-              />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
-              <Tooltip
-                labelFormatter={(value) => {
-                  const date = new Date(value);
-                  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
-                }}
-                formatter={(value) => [`${Number(value).toFixed(1)}/100`, 'Readiness']}
-              />
-              <Line
-                type="monotone"
-                dataKey="score"
-                name="Readiness"
-                stroke="#2563eb"
-                strokeWidth={2.5}
-                dot={{ r: 3 }}
-                activeDot={{ r: 5 }}
-                connectNulls={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+        <ChartFrame label="Line chart of historical assessment scores">
+          <LineChart data={points} margin={{ top: 12, right: 16, left: -8, bottom: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.25} />
+            <XAxis
+              dataKey="date"
+              tick={AXIS_TICK}
+              tickFormatter={(value) => {
+                const date = new Date(value);
+                return Number.isNaN(date.getTime())
+                  ? value
+                  : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+              }}
+              minTickGap={24}
+              tickLine={false}
+            />
+            <YAxis domain={[0, 100]} tick={AXIS_TICK} width={40} tickLine={false} axisLine={false} />
+            <Tooltip
+              labelFormatter={(value) => {
+                const date = new Date(value);
+                return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+              }}
+              formatter={(value) => [`${Number(value).toFixed(1)}/100`, 'Readiness']}
+            />
+            <Line
+              type="monotone"
+              dataKey="score"
+              name="Readiness"
+              stroke={CHART_COLORS[0]}
+              strokeWidth={2.5}
+              dot={{ r: 3 }}
+              activeDot={{ r: 5 }}
+              connectNulls={false}
+              isAnimationActive={false}
+            />
+          </LineChart>
+        </ChartFrame>
       ) : (
         <ChartEmptyState message="No historical assessments are available for this website yet. Run another assessment to start building a trend." />
       )}
@@ -197,41 +220,55 @@ function AssessmentTrendChart({ data }) {
 
 function CategoryScoreChart({ data }) {
   const points = Array.isArray(data)
-    ? data.filter(
-        (item) =>
-          item &&
-          typeof item.category === 'string' &&
-          Number.isFinite(Number(item.score)) &&
-          Number(item.score) >= 0 &&
-          Number(item.score) <= 100,
-      )
+    ? data
+        .filter(
+          (item) =>
+            item &&
+            typeof item.category === 'string' &&
+            Number.isFinite(Number(item.score)) &&
+            Number(item.score) >= 0 &&
+            Number(item.score) <= 100,
+        )
+        // The API returns raw keys such as "ai_readiness". Show the same
+        // human-readable labels used everywhere else on the page.
+        .map((item) => ({
+          ...item,
+          label: CATEGORY_LABELS[item.category] || humanizeKey(item.category),
+          score: Number(item.score),
+        }))
     : [];
 
   return (
-    <Card>
+    <Card className="flex h-full flex-col">
       <CardHeader
         title="Category performance"
-        subtitle="Saved category scores, on a scale of 0?100"
+        subtitle="Saved category scores, on a scale of 0 to 100"
       />
       {points.length > 0 ? (
-        <div className="h-72 w-full" role="img" aria-label="Bar chart comparing website category scores">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={points} margin={{ top: 12, right: 12, left: -14, bottom: 36 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis
-                dataKey="category"
-                interval={0}
-                angle={-25}
-                textAnchor="end"
-                height={70}
-                tick={{ fontSize: 10 }}
-              />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
-              <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}/100`, 'Score']} />
-              <Bar dataKey="score" name="Score" fill="#2563eb" radius={[5, 5, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        <ChartFrame label="Bar chart comparing website category scores">
+          <BarChart data={points} margin={{ top: 12, right: 16, left: -8, bottom: 52 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.25} />
+            <XAxis
+              dataKey="label"
+              interval={0}
+              angle={-20}
+              textAnchor="end"
+              height={64}
+              tick={{ fontSize: 10, fill: 'currentColor' }}
+              tickLine={false}
+            />
+            <YAxis domain={[0, 100]} tick={AXIS_TICK} width={40} tickLine={false} axisLine={false} />
+            <Tooltip formatter={(value) => [`${Number(value).toFixed(1)}/100`, 'Score']} />
+            <Bar
+              dataKey="score"
+              name="Score"
+              fill={CHART_COLORS[0]}
+              radius={[5, 5, 0, 0]}
+              maxBarSize={48}
+              isAnimationActive={false}
+            />
+          </BarChart>
+        </ChartFrame>
       ) : (
         <ChartEmptyState message="Category chart data is not available for this assessment." />
       )}
@@ -250,36 +287,44 @@ function RecommendationPriorityChart({ data }) {
       )
     : [];
 
+  if (points.length === 0) {
+    return (
+      <ChartEmptyState message="No saved recommendation-priority counts are available for this assessment." />
+    );
+  }
+
   return (
     <div className="mb-6">
-      {points.length > 0 ? (
-        <div className="h-56 w-full" role="img" aria-label="Pie chart of saved recommendation priorities">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={points}
-                dataKey="value"
-                nameKey="name"
-                cx="50%"
-                cy="46%"
-                outerRadius={76}
-                paddingAngle={2}
-              >
-                {points.map((item, index) => (
-                  <Cell
-                    key={`${item.name}-${index}`}
-                    fill={CHART_COLORS[index % CHART_COLORS.length]}
-                  />
-                ))}
-              </Pie>
-              <Tooltip formatter={(value) => [value, 'Recommendations']} />
-              <Legend verticalAlign="bottom" height={32} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      ) : (
-        <ChartEmptyState message="No saved recommendation-priority counts are available for this assessment." />
-      )}
+      <ChartFrame height="h-64" label="Pie chart of saved recommendation priorities">
+        <PieChart>
+          <Pie
+            data={points}
+            dataKey="value"
+            nameKey="name"
+            cx="50%"
+            cy="46%"
+            outerRadius={74}
+            paddingAngle={2}
+            stroke="none"
+            isAnimationActive={false}
+          >
+            {points.map((item, index) => (
+              <Cell
+                key={`${item.name}-${index}`}
+                fill={CHART_COLORS[index % CHART_COLORS.length]}
+              />
+            ))}
+          </Pie>
+          <Tooltip formatter={(value) => [value, 'Recommendations']} />
+          <Legend
+            verticalAlign="bottom"
+            height={36}
+            iconType="circle"
+            iconSize={8}
+            wrapperStyle={{ fontSize: 12, paddingTop: 4 }}
+          />
+        </PieChart>
+      </ChartFrame>
     </div>
   );
 }
@@ -356,18 +401,21 @@ export default function AnalyticsPage() {
     }));
 
   const validCategories = categories.filter(
-    (item) =>
-      typeof item.value === 'number' &&
-      Number.isFinite(item.value) &&
-      item.value >= 0 &&
-      item.value <= 100,
+    (item) => isNumericValue(item.value) && clampScore(item.value) >= 0 && Number(item.value) <= 100,
   );
 
-  const score = Number(dashboard?.overall_score);
-  const hasScore = Number.isFinite(score) && score >= 0 && score <= 100;
-  const confidence = Number(dashboard?.confidence);
+  // Guard the raw value first: Number(null) and Number('') are both 0.
+  const hasScore =
+    isNumericValue(dashboard?.overall_score) &&
+    clampScore(dashboard.overall_score) >= 0 &&
+    Number(dashboard.overall_score) <= 100;
+  const score = hasScore ? clampScore(dashboard.overall_score) : 0;
+
   const hasConfidence =
-    Number.isFinite(confidence) && confidence >= 0 && confidence <= 1;
+    isNumericValue(dashboard?.confidence) &&
+    Number(dashboard.confidence) >= 0 &&
+    Number(dashboard.confidence) <= 1;
+  const confidence = hasConfidence ? Number(dashboard.confidence) : 0;
 
   return (
     <PageWrapper
@@ -386,18 +434,16 @@ export default function AnalyticsPage() {
       {dashboardLoading && (
         <Card className="mb-6">
           <CardHeader title="Loading assessment analytics" />
-          <div className="space-y-3">
-            <div className="skeleton h-5 w-1/3" />
-            <div className="skeleton h-4 w-full" />
-            <div className="skeleton h-4 w-2/3" />
+          <div role="status" aria-live="polite">
+            <SkeletonBlock lines={3} />
           </div>
         </Card>
       )}
 
       {!dashboardLoading && dashboardError && (
-        <Card className="mb-6">
+        <Card className="mb-6 border-rose-200 dark:border-rose-800">
           <CardHeader title="Score analytics unavailable" />
-          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+          <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">
             {dashboardError}
           </p>
           <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
@@ -418,16 +464,14 @@ export default function AnalyticsPage() {
               <p className="text-sm text-slate-500 dark:text-slate-400">
                 Overall readiness
               </p>
-              <div className="mt-2 flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-slate-900 dark:text-white">
-                  {hasScore ? score.toFixed(1) : '—'}
+              <div className="mt-2 flex flex-wrap items-baseline gap-2">
+                <span className="text-3xl font-bold tabular-nums text-slate-900 dark:text-white">
+                  {hasScore ? score.toFixed(1) : NOT_AVAILABLE}
                 </span>
-                {hasScore && (
-                  <span className="text-sm text-slate-500">/ 100</span>
-                )}
+                {hasScore && <span className="text-sm text-slate-500">/ 100</span>}
               </div>
               <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                Grade {dashboard.grade || 'Unavailable'}
+                Grade {dashboard.grade || NOT_AVAILABLE}
               </p>
             </Card>
 
@@ -435,7 +479,7 @@ export default function AnalyticsPage() {
               <p className="text-sm text-slate-500 dark:text-slate-400">
                 Measured categories
               </p>
-              <p className="mt-2 text-3xl font-bold text-slate-900 dark:text-white">
+              <p className="mt-2 text-3xl font-bold tabular-nums text-slate-900 dark:text-white">
                 {validCategories.length}
                 <span className="ml-1 text-base font-normal text-slate-500">
                   / {Object.keys(CATEGORY_LABELS).length}
@@ -450,8 +494,8 @@ export default function AnalyticsPage() {
               <p className="text-sm text-slate-500 dark:text-slate-400">
                 Measurement coverage
               </p>
-              <p className="mt-2 text-3xl font-bold text-slate-900 dark:text-white">
-                {hasConfidence ? `${Math.round(confidence * 100)}%` : '—'}
+              <p className="mt-2 text-3xl font-bold tabular-nums text-slate-900 dark:text-white">
+                {hasConfidence ? `${Math.round(confidence * 100)}%` : NOT_AVAILABLE}
               </p>
               <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
                 Reported by the scoring engine
@@ -465,13 +509,13 @@ export default function AnalyticsPage() {
           </div>
 
           <div className="grid gap-6 xl:grid-cols-2">
-            <Card>
+            <Card className="flex h-full flex-col">
               <CardHeader
                 title="Category score breakdown"
-                subtitle="Saved scores on a scale of 0–100"
+                subtitle="Saved scores on a scale of 0 to 100"
               />
               {validCategories.length > 0 ? (
-                <div className="space-y-5">
+                <div className="flex flex-1 flex-col justify-between gap-5">
                   {categories.map((item) => (
                     <ScoreBar
                       key={item.key}
@@ -487,18 +531,20 @@ export default function AnalyticsPage() {
               )}
             </Card>
 
-            <Card>
+            <Card className="flex h-full flex-col">
               <CardHeader
                 title="Recommendation priorities"
                 subtitle={
                   recommendationsLoading
-                    ? 'Loading saved recommendation data…'
-                    : `${recommendations.length} recommendation(s) returned`
+                    ? 'Loading saved recommendation data'
+                    : `${recommendations.length} recommendation${
+                        recommendations.length === 1 ? '' : 's'
+                      } returned`
                 }
               />
               {recommendationError ? (
                 <div>
-                  <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+                  <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">
                     {recommendationError}
                   </p>
                   <Button
@@ -510,10 +556,8 @@ export default function AnalyticsPage() {
                   </Button>
                 </div>
               ) : recommendationsLoading ? (
-                <div className="space-y-4">
-                  <div className="skeleton h-4 w-full" />
-                  <div className="skeleton h-4 w-4/5" />
-                  <div className="skeleton h-4 w-3/5" />
+                <div role="status" aria-live="polite">
+                  <SkeletonBlock lines={4} />
                 </div>
               ) : (
                 <>

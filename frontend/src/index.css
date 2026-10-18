@@ -31,6 +31,10 @@ html {
   min-height: 100%;
   scroll-behavior: smooth;
   background: #f8fafc;
+  /* Long URLs, UUIDs and unbroken tokens must never scroll the page sideways.
+     Individual components opt back in with `overflow-x-auto` where a
+     contained scroller is the right answer (tables, charts). */
+  overflow-x: hidden;
 }
 
 html.dark {
@@ -43,6 +47,40 @@ body {
   min-height: 100vh;
   margin: 0;
   @apply bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
+}
+
+/* Keep long identifiers, URLs and code-like values inside their container. */
+p,
+li,
+dd,
+dt,
+td,
+th,
+span {
+  overflow-wrap: break-word;
+}
+
+code,
+pre,
+kbd,
+samp {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* Respect the operating system's reduced-motion setting. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 button,
@@ -73,15 +111,4 @@ button:not(:disabled),
 
 .skeleton {
   @apply animate-pulse rounded-lg bg-slate-200 dark:bg-slate-800;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
 }

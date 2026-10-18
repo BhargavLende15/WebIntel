@@ -2,71 +2,88 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import Card, { CardHeader } from '../components/ui/Card';
+import { SkeletonBlock } from '../components/ui/Skeleton';
 import { PageWrapper } from '../layouts/MainLayout';
 import { getSavedRecommendations } from '../services/api';
+import { NOT_AVAILABLE, formatDisplayValue, humanizeKey } from '../utils/format';
+
+const PRIORITIES = ['critical', 'high', 'medium', 'low'];
 
 const PRIORITY_STYLES = {
-  critical: 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300',
+  critical:
+    'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300',
   high: 'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-900 dark:bg-orange-950/40 dark:text-orange-300',
   medium: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300',
   low: 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300',
 };
 
-function RecommendationCard({ item }) {
-  const priority = String(item.priority || '').toLowerCase();
+function DetailBlock({ title, children, pre = false }) {
+  if (!children) return null;
 
   return (
-    <Card>
+    <section className="mt-5 first:mt-0">
+      <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200">{title}</h4>
+      <div
+        className={[
+          'mt-1.5 text-sm leading-6 break-words text-slate-600 dark:text-slate-400',
+          pre && 'whitespace-pre-line',
+        ].join(' ')}
+      >
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function RecommendationCard({ item }) {
+  const priority = String(item.priority ?? '').toLowerCase();
+  const title = item.issue ? humanizeKey(item.issue) : 'Website improvement';
+  const improvement =
+    item.estimated_improvement == null || item.estimated_improvement === ''
+      ? null
+      : `+${item.estimated_improvement}`;
+
+  return (
+    <Card className="flex h-full flex-col">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h3 className="text-base font-semibold capitalize text-slate-900 dark:text-white">
-            {String(item.issue || 'Website improvement').replace(/_/g, ' ')}
-          </h3>
-          <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-            {item.description}
+          <h3 className="text-base font-semibold text-slate-900 dark:text-white">{title}</h3>
+          <p className="mt-2 text-sm leading-6 break-words text-slate-600 dark:text-slate-300">
+            {formatDisplayValue(item.description, { fallback: NOT_AVAILABLE })}
           </p>
         </div>
-        <span className={`rounded-full border px-3 py-1 text-xs font-semibold capitalize ${
-          PRIORITY_STYLES[priority] || 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
-        }`}>
-          {priority || 'unassigned'}
+        <span
+          className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold capitalize ${
+            PRIORITY_STYLES[priority] || PRIORITY_STYLES.low
+          }`}
+        >
+          {PRIORITIES.includes(priority) ? priority : 'Unassigned'}
         </span>
       </div>
 
-      {item.why_it_matters && (
-        <section className="mt-5">
-          <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Why it matters</h4>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{item.why_it_matters}</p>
-        </section>
-      )}
-
-      {item.business_impact && (
-        <section className="mt-4">
-          <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Business impact</h4>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{item.business_impact}</p>
-        </section>
-      )}
-
-      <div className="mt-5 flex flex-wrap gap-2">
-        {item.difficulty && (
-          <span className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-            Difficulty: {item.difficulty}
-          </span>
-        )}
-        {item.estimated_improvement != null && (
-          <span className="rounded-lg bg-primary-50 px-3 py-1.5 text-xs text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">
-            Estimated improvement: {item.estimated_improvement}
-          </span>
-        )}
+      <div className="mt-5 flex-1">
+        <DetailBlock title="Why it matters">{formatDisplayValue(item.why_it_matters, { fallback: '' })}</DetailBlock>
+        <DetailBlock title="Business impact">
+          {formatDisplayValue(item.business_impact, { fallback: '' })}
+        </DetailBlock>
+        <DetailBlock title="Suggested implementation" pre>
+          {formatDisplayValue(item.suggested_implementation, { fallback: '' })}
+        </DetailBlock>
       </div>
 
-      {item.suggested_implementation && (
-        <section className="mt-5 border-t border-slate-200 pt-4 dark:border-slate-700">
-          <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Suggested implementation</h4>
-          <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-600 dark:text-slate-300">
-            {item.suggested_implementation}
-          </p>
-        </section>
+      {(item.difficulty || improvement) && (
+        <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
+          {item.difficulty && (
+            <span className="rounded-lg bg-slate-100 px-3 py-1.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              Difficulty: {formatDisplayValue(item.difficulty)}
+            </span>
+          )}
+          {improvement && (
+            <span className="rounded-lg bg-primary-50 px-3 py-1.5 text-xs font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-300">
+              Estimated improvement: {improvement}
+            </span>
+          )}
+        </div>
       )}
     </Card>
   );
@@ -88,48 +105,64 @@ export default function RecommendationsPage() {
 
       try {
         const { data } = await getSavedRecommendations(id);
-        if (active) setItems(data.recommendations || []);
+        if (active) {
+          setItems(Array.isArray(data?.recommendations) ? data.recommendations : []);
+        }
       } catch (err) {
         if (!active) return;
         const detail = err.response?.data?.detail;
-        setError(typeof detail === 'string' ? detail : 'Unable to load recommendations. Confirm that the analysis is complete and the backend is running.');
+        setError(
+          typeof detail === 'string' && detail.trim() !== ''
+            ? detail
+            : err.response
+              ? 'Recommendations are not available for this analysis yet.'
+              : 'Cannot reach the WebIntel API. Check that the backend is running, then try again.',
+        );
       } finally {
         if (active) setLoading(false);
       }
     }
 
     loadRecommendations();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [id, retryKey]);
 
   return (
     <PageWrapper title="Recommendations" subtitle={`Prioritized improvements for analysis ${id}`}>
-      <div className="mb-6">
+      <div className="mb-6 flex flex-wrap gap-3">
         <Link to={`/results/${id}`}>
-          <Button variant="outline">Back to Results</Button>
+          <Button variant="outline">Back to results</Button>
         </Link>
       </div>
 
       {loading && (
         <Card>
-          <CardHeader title="Loading recommendations" subtitle="Generating findings from the completed analysis..." />
-          <div className="mt-4 space-y-3" aria-label="Loading recommendations">
-            <div className="skeleton h-5 w-1/3" />
-            <div className="skeleton h-4 w-full" />
-            <div className="skeleton h-4 w-2/3" />
+          <CardHeader
+            title="Loading recommendations"
+            subtitle="Generating findings from the completed analysis"
+          />
+          <div role="status" aria-live="polite">
+            <SkeletonBlock lines={4} />
           </div>
         </Card>
       )}
 
       {!loading && error && (
-        <Card>
+        <Card className="border-rose-200 dark:border-rose-800">
           <CardHeader title="Recommendations unavailable" />
-          <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>
-          <div className="mt-4">
-            <Button onClick={() => setRetryKey((key) => key + 1)}>Try Again</Button>
+          <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">
+            {error}
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Button onClick={() => setRetryKey((key) => key + 1)}>Try again</Button>
+            <Link to={`/results/${id}`}>
+              <Button variant="outline">Back to results</Button>
+            </Link>
           </div>
           <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-            Recommendations can only be generated after the analysis completes.
+            Recommendations can only be generated after an analysis completes.
           </p>
         </Card>
       )}
@@ -138,8 +171,14 @@ export default function RecommendationsPage() {
         <Card>
           <CardHeader title="No recommendations found" />
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            The engine did not identify any actionable issues for this analysis.
+            WebIntel's recommendation engine did not identify any actionable issues for this
+            analysis. Nothing has been invented to fill this section.
           </p>
+          <div className="mt-4">
+            <Link to={`/results/${id}`}>
+              <Button variant="outline">Back to results</Button>
+            </Link>
+          </div>
         </Card>
       )}
 
@@ -155,8 +194,8 @@ export default function RecommendationsPage() {
             </p>
           </Card>
           <div className="grid gap-5 xl:grid-cols-2">
-            {items.map((item) => (
-              <RecommendationCard key={item.issue} item={item} />
+            {items.map((item, index) => (
+              <RecommendationCard key={`${item?.issue ?? 'finding'}-${index}`} item={item} />
             ))}
           </div>
         </>

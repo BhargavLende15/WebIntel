@@ -128,15 +128,19 @@ function LogoutButton({ mobile = false }) {
     <button
       type="button"
       onClick={handleLogout}
+      aria-label={mobile ? 'Sign out' : undefined}
+      title={mobile ? 'Sign out' : undefined}
       className={[
         'flex items-center justify-center gap-2 rounded-xl font-medium transition-colors',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900',
-        mobile ? 'min-h-11 shrink-0 px-3 py-2 text-xs' : 'w-full px-3 py-3 text-sm',
+        mobile
+          ? 'h-11 w-11 shrink-0 px-0 text-xs'
+          : 'w-full min-h-11 px-3 py-2 text-sm',
         'text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30',
       ].join(' ')}
     >
       <NavIcon name="logout" className={mobile ? 'h-4 w-4' : 'h-5 w-5'} />
-      Sign out
+      {mobile ? <span className="sr-only">Sign out</span> : 'Sign out'}
     </button>
   );
 }
@@ -262,10 +266,20 @@ export function MobileNav() {
   return (
     <nav
       aria-label="Mobile navigation"
-      className="sticky bottom-0 z-30 flex items-center gap-1 overflow-x-auto border-t border-slate-200 bg-white/95 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(15,23,42,0.04)] backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 lg:hidden"
+      className="sticky bottom-0 z-30 flex items-stretch gap-1 border-t border-slate-200 bg-white/95 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(15,23,42,0.04)] backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 lg:hidden"
     >
-      <NavigationLinks groups={groups} mobile />
-      <div className="ml-auto shrink-0"><LogoutButton mobile /></div>
+      {/* The link list scrolls horizontally; sign-out stays pinned so it can
+          never be pushed off-screen on a narrow viewport. */}
+      <div className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain">
+        <NavigationLinks groups={groups} mobile />
+      </div>
+      <span
+        aria-hidden="true"
+        className="my-1 w-px shrink-0 bg-slate-200 dark:bg-slate-700"
+      />
+      <div className="shrink-0">
+        <LogoutButton mobile />
+      </div>
     </nav>
   );
 }
@@ -276,13 +290,37 @@ export function Header({ title, subtitle }) {
   return (
     <header className="sticky top-0 z-20 flex min-h-[72px] items-center justify-between gap-4 border-b border-slate-200/80 bg-white/90 px-4 py-4 backdrop-blur sm:px-6 xl:px-8 dark:border-slate-800 dark:bg-slate-900/90">
       <div className="min-w-0">
-        <h1 className="truncate text-lg font-semibold tracking-tight text-slate-950 sm:text-xl dark:text-white">{title}</h1>
-        {subtitle && <p className="mt-0.5 hidden truncate text-sm text-slate-500 sm:block dark:text-slate-400">{subtitle}</p>}
+        <h1
+          title={title}
+          className="truncate text-lg font-semibold tracking-tight text-slate-950 sm:text-xl dark:text-white"
+        >
+          {title}
+        </h1>
+        {subtitle && (
+          <p
+            title={typeof subtitle === 'string' ? subtitle : undefined}
+            className="mt-0.5 hidden truncate text-sm text-slate-500 sm:block dark:text-slate-400"
+          >
+            {subtitle}
+          </p>
+        )}
       </div>
       <div className="flex shrink-0 items-center gap-3">
         <div className="hidden min-w-0 text-right md:block">
-          <p className="max-w-48 truncate text-sm font-medium text-slate-700 dark:text-slate-200">{user?.full_name || user?.email || 'WebIntel user'}</p>
-          {user?.full_name && user?.email && <p className="max-w-48 truncate text-xs text-slate-500 dark:text-slate-400">{user.email}</p>}
+          <p
+            title={user?.full_name || user?.email || undefined}
+            className="max-w-48 truncate text-sm font-medium text-slate-700 dark:text-slate-200"
+          >
+            {user?.full_name || user?.email || 'WebIntel user'}
+          </p>
+          {user?.full_name && user?.email && (
+            <p
+              title={user.email}
+              className="max-w-48 truncate text-xs text-slate-500 dark:text-slate-400"
+            >
+              {user.email}
+            </p>
+          )}
         </div>
         <ThemeToggle />
       </div>

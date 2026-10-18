@@ -1,33 +1,68 @@
-﻿import { useCallback, useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import Card, { CardHeader } from '../components/ui/Card';
 import { PageWrapper } from '../layouts/MainLayout';
 import { getHistory } from '../services/api';
+import {
+  ELLIPSIS,
+  NOT_AVAILABLE,
+  formatDateTime,
+  formatScore,
+  isNumericValue,
+} from '../utils/format';
 
 function formatDate(value) {
-  if (!value) return 'Date unavailable';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? 'Date unavailable'
-    : date.toLocaleString();
+  return formatDateTime(value, 'Date unavailable');
 }
 
-function formatScore(value) {
-  return typeof value === 'number' && Number.isFinite(value)
-    ? value.toFixed(1)
-    : '—';
+function formatShortDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? ''
+    : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function getSavedScoreCount(entries) {
+  if (!Array.isArray(entries)) return 0;
+  return entries.filter((entry) => isNumericValue(entry?.overall_score)).length;
+}
+
+const TREND_HEIGHT = 220;
+
+/**
+ * Measures the container so the chart is drawn 1:1 with CSS pixels.
+ *
+ * A fixed viewBox with `w-full` would scale the axis labels down to roughly
+ * 5px on a phone, and a `min-w` would force a horizontal scroller. Measuring
+ * keeps every label at its intended size at any viewport width.
+ */
+function useContainerWidth() {
+  const [width, setWidth] = useState(0);
+  const [element, setElement] = useState(null);
+
+  useEffect(() => {
+    if (!element) return undefined;
+
+    const observer = new ResizeObserver((entries) => {
+      const next = entries[0]?.contentRect?.width ?? 0;
+      setWidth(Math.round(next));
+    });
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [element]);
+
+  return [setElement, width];
 }
 
 function ScoreTrend({ entries }) {
   const points = entries
-    .filter(
-      (entry) =>
-        typeof entry.overall_score === 'number' &&
-        Number.isFinite(entry.overall_score),
-    )
+    .filter((entry) => isNumericValue(entry?.overall_score))
     .slice()
     .reverse();
+
+  const [ref, measuredWidth] = useContainerWidth();
 
   if (points.length < 2) {
     return (
@@ -40,12 +75,14 @@ function ScoreTrend({ entries }) {
     );
   }
 
-  const width = 720;
-  const height = 220;
-  const padX = 28;
+  const width = measuredWidth || 640;
+  const height = TREND_HEIGHT;
+  // Give the labels room without letting them eat narrow viewports.
+  const padX = width < 420 ? 34 : 40;
   const padY = 24;
-  const plotWidth = width - padX * 2;
+  const plotWidth = Math.max(1, width - padX * 2);
   const plotHeight = height - padY * 2;
+  const fontSize = width < 420 ? 10 : 11;
 
   const coordinates = points.map((entry, index) => ({
     x: padX + (index / (points.length - 1)) * plotWidth,
@@ -56,14 +93,21 @@ function ScoreTrend({ entries }) {
 
   const polyline = coordinates.map(({ x, y }) => `${x},${y}`).join(' ');
 
+  // Label only a few points when space is tight, so they never collide.
+  const labelEvery = width < 420 ? Math.max(1, Math.ceil(points.length / 4)) : 1;
+  const firstDate = formatDate(points[0].created_at);
+  const lastDate = formatDate(points[points.length - 1].created_at);
+
   return (
     <div>
-      <div className="overflow-x-auto">
+      <div ref={ref} className="w-full min-w-0 text-slate-500 dark:text-slate-400">
         <svg
           viewBox={`0 0 ${width} ${height}`}
+          width={width}
+          height={height}
           role="img"
-          aria-label={`Assessment score trend across ${points.length} assessments`}
-          className="h-auto min-w-[480px] w-full"
+          aria-label={`Assessment score trend across ${points.length} assessments, from ${firstDate} to ${lastDate}`}
+          className="block h-auto w-full"
         >
           {[0, 25, 50, 75, 100].map((value) => {
             const y = padY + (1 - value / 100) * plotHeight;
@@ -75,16 +119,16 @@ function ScoreTrend({ entries }) {
                   x2={width - padX}
                   y2={y}
                   stroke="currentColor"
-                  strokeOpacity="0.12"
+                  strokeOpacity="0.16"
                   strokeDasharray="4 5"
                 />
                 <text
                   x={padX - 8}
-                  y={y + 4}
+                  y={y + fontSize / 3}
                   textAnchor="end"
-                  fontSize="11"
+                  fontSize={fontSize}
                   fill="currentColor"
-                  opacity="0.65"
+                  opacity="0.7"
                 >
                   {value}
                 </text>
@@ -114,12 +158,24 @@ function ScoreTrend({ entries }) {
               <title>
                 {`${formatDate(point.date)}: ${formatScore(point.score)}/100`}
               </title>
+              {(index % labelEvery === 0 || index === coordinates.length - 1) && (
+                <text
+                  x={point.x}
+                  y={height - 6}
+                  textAnchor={index === 0 ? 'start' : index === coordinates.length - 1 ? 'end' : 'middle'}
+                  fontSize={fontSize}
+                  fill="currentColor"
+                  opacity="0.7"
+                >
+                  {formatShortDate(point.date)}
+                </text>
+              )}
             </g>
           ))}
         </svg>
       </div>
       <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-        Scores are displayed in chronological order. Only saved assessment scores are plotted.
+        Scores are shown in chronological order. Only assessments with a saved score are plotted.
       </p>
     </div>
   );
@@ -131,26 +187,6 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [retryKey, setRetryKey] = useState(0);
-
-  const loadHistory = useCallback(async () => {
-    setLoading(true);
-    setError('');
-
-    try {
-      const { data } = await getHistory(websiteId);
-      setHistory(data);
-    } catch (err) {
-      setHistory(null);
-      const detail = err.response?.data?.detail;
-      setError(
-        typeof detail === 'string'
-          ? detail
-          : 'Unable to load assessment history. Check your connection and try again.',
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [websiteId]);
 
   useEffect(() => {
     let active = true;
@@ -167,9 +203,11 @@ export default function HistoryPage() {
         setHistory(null);
         const detail = err.response?.data?.detail;
         setError(
-          typeof detail === 'string'
+          typeof detail === 'string' && detail.trim() !== ''
             ? detail
-            : 'Unable to load assessment history. Check your connection and try again.',
+            : err.response
+              ? 'Unable to load assessment history. Try again in a moment.'
+              : 'Cannot reach the WebIntel API. Check that the backend is running, then try again.',
         );
       } finally {
         if (active) setLoading(false);
@@ -177,10 +215,13 @@ export default function HistoryPage() {
     }
 
     load();
+
     return () => {
       active = false;
     };
   }, [websiteId, retryKey]);
+
+  const entries = Array.isArray(history?.entries) ? history.entries : [];
 
   return (
     <PageWrapper
@@ -191,15 +232,15 @@ export default function HistoryPage() {
         <Link to="/analyze">
           <Button>New assessment</Button>
         </Link>
-        <Button variant="outline" onClick={loadHistory} disabled={loading}>
-          {loading ? 'Refreshing…' : 'Refresh history'}
+        <Button variant="outline" onClick={() => setRetryKey((value) => value + 1)} loading={loading}>
+          Refresh history
         </Button>
       </div>
 
       {loading && (
         <Card>
           <CardHeader title="Loading assessment history" />
-          <div className="space-y-3">
+          <div className="space-y-3" role="status" aria-live="polite">
             <div className="skeleton h-5 w-1/3" />
             <div className="skeleton h-4 w-full" />
             <div className="skeleton h-4 w-2/3" />
@@ -208,9 +249,9 @@ export default function HistoryPage() {
       )}
 
       {!loading && error && (
-        <Card>
+        <Card className="border-rose-200 dark:border-rose-800">
           <CardHeader title="History unavailable" />
-          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+          <p role="alert" className="text-sm text-rose-600 dark:text-rose-400">
             {error}
           </p>
           <div className="mt-4">
@@ -222,75 +263,78 @@ export default function HistoryPage() {
       )}
 
       {!loading && !error && history && (
-        <>
-          <div className="mb-6 grid gap-4 sm:grid-cols-2">
+        <div className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-2">
             <Card>
               <p className="text-sm text-slate-500 dark:text-slate-400">
                 Total assessments
               </p>
-              <p className="mt-2 text-3xl font-bold text-slate-900 dark:text-white">
-                {history.total_assessments}
+              <p className="mt-2 text-3xl font-bold tabular-nums text-slate-900 dark:text-white">
+                {isNumericValue(history.total_assessments)
+                  ? Number(history.total_assessments)
+                  : entries.length}
               </p>
             </Card>
             <Card>
               <p className="text-sm text-slate-500 dark:text-slate-400">
                 Assessments with saved scores
               </p>
-              <p className="mt-2 text-3xl font-bold text-slate-900 dark:text-white">
-                {history.entries.filter(
-                  (entry) =>
-                    typeof entry.overall_score === 'number' &&
-                    Number.isFinite(entry.overall_score),
-                ).length}
+              <p className="mt-2 text-3xl font-bold tabular-nums text-slate-900 dark:text-white">
+                {getSavedScoreCount(entries)}
               </p>
             </Card>
           </div>
 
-          <Card className="mb-6">
+          <Card>
             <CardHeader
               title="Score trend"
               subtitle="Historical readiness scores for this website"
             />
-            <ScoreTrend entries={history.entries || []} />
+            <ScoreTrend entries={entries} />
           </Card>
 
           <Card>
             <CardHeader
               title="Past assessments"
-              subtitle={history.website_url}
+              subtitle={history.website_url || NOT_AVAILABLE}
             />
 
-            {!history.entries?.length ? (
+            {entries.length === 0 ? (
               <div className="py-10 text-center">
                 <p className="font-medium text-slate-800 dark:text-slate-200">
                   No assessments yet
                 </p>
                 <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                  Start an assessment to begin building this website’s history.
+                  Start an assessment to begin building this website{ELLIPSIS} history.
                 </p>
+                <div className="mt-5 flex justify-center">
+                  <Link to="/analyze">
+                    <Button>Analyze this website</Button>
+                  </Link>
+                </div>
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="-mx-1 overflow-x-auto px-1">
                 <table className="w-full min-w-[560px] text-left text-sm">
+                  <caption className="sr-only">
+                    Saved assessments for {history.website_url || 'this website'}, newest first
+                  </caption>
                   <thead>
                     <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                      <th className="px-3 py-3 font-semibold">Assessment date</th>
-                      <th className="px-3 py-3 font-semibold">Score</th>
-                      <th className="px-3 py-3 font-semibold">Grade</th>
-                      <th className="px-3 py-3 text-right font-semibold">Action</th>
+                      <th scope="col" className="px-3 py-3 font-semibold">Assessment date</th>
+                      <th scope="col" className="px-3 py-3 font-semibold">Score</th>
+                      <th scope="col" className="px-3 py-3 font-semibold">Grade</th>
+                      <th scope="col" className="px-3 py-3 text-right font-semibold">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {history.entries.map((entry) => (
+                    {entries.map((entry) => (
                       <tr key={entry.analysis_id}>
                         <td className="px-3 py-4 text-slate-600 dark:text-slate-300">
                           {formatDate(entry.created_at)}
                         </td>
-                        <td className="px-3 py-4 font-semibold text-slate-900 dark:text-white">
-                          {formatScore(entry.overall_score)}
-                          {entry.overall_score != null && (
-                            <span className="font-normal text-slate-500"> / 100</span>
-                          )}
+                        <td className="px-3 py-4 font-semibold tabular-nums text-slate-900 dark:text-white">
+                          {formatScore(entry.overall_score, { suffix: true })}
                         </td>
                         <td className="px-3 py-4">
                           {entry.grade ? (
@@ -298,7 +342,7 @@ export default function HistoryPage() {
                               {entry.grade}
                             </span>
                           ) : (
-                            <span className="text-slate-400">—</span>
+                            <span className="text-slate-400">{NOT_AVAILABLE}</span>
                           )}
                         </td>
                         <td className="px-3 py-4 text-right">
@@ -316,7 +360,7 @@ export default function HistoryPage() {
               </div>
             )}
           </Card>
-        </>
+        </div>
       )}
     </PageWrapper>
   );

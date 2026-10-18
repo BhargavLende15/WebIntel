@@ -4,6 +4,7 @@ import Button from '../components/ui/Button';
 import Card, { CardHeader } from '../components/ui/Card';
 import { PageWrapper } from '../layouts/MainLayout';
 import { getLatestDashboard } from '../services/api';
+import { clampScore, formatScore as formatScoreValue, isNumericValue } from '../utils/format';
 
 const categories = [
   { key: 'performance', name: 'Performance', weight: '20%', marker: 'P' },
@@ -16,26 +17,25 @@ const categories = [
 ];
 
 function formatScore(value) {
-  return typeof value === 'number' && Number.isFinite(value)
-    ? value.toFixed(1)
-    : '—';
+  return formatScoreValue(value);
 }
 
 function scoreTone(value) {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return 'bg-slate-300 dark:bg-slate-600';
-  if (value >= 80) return 'bg-emerald-500';
-  if (value >= 60) return 'bg-primary-500';
-  if (value >= 40) return 'bg-amber-500';
+  if (!isNumericValue(value)) return 'bg-slate-300 dark:bg-slate-600';
+  const score = Number(value);
+  if (score >= 80) return 'bg-emerald-500';
+  if (score >= 60) return 'bg-primary-500';
+  if (score >= 40) return 'bg-amber-500';
   return 'bg-rose-500';
 }
 
 function MetricCard({ label, value, detail, marker }) {
   return (
-    <Card className="relative overflow-hidden">
+    <Card>
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{label}</p>
-          <p className="mt-3 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
+          <p className="mt-3 text-2xl font-semibold tabular-nums tracking-tight text-slate-950 dark:text-white">
             {value}
           </p>
           <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{detail}</p>
@@ -49,8 +49,8 @@ function MetricCard({ label, value, detail, marker }) {
 }
 
 function CategoryScore({ category, value }) {
-  const valid = typeof value === 'number' && Number.isFinite(value);
-  const safeValue = valid ? Math.max(0, Math.min(100, value)) : 0;
+  const valid = isNumericValue(value);
+  const safeValue = clampScore(value);
 
   return (
     <div className="rounded-xl border border-slate-100 p-4 dark:border-slate-800">
@@ -60,11 +60,12 @@ function CategoryScore({ category, value }) {
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
+            <p className="min-w-0 text-sm font-medium text-slate-800 dark:text-slate-200">
               {category.name}
             </p>
-            <p className="text-sm font-semibold tabular-nums text-slate-950 dark:text-white">
-              {formatScore(value)}{valid ? '/100' : ''}
+            <p className="shrink-0 text-sm font-semibold tabular-nums text-slate-950 dark:text-white">
+              {formatScore(value)}
+              {valid ? <span className="font-normal text-slate-500">/100</span> : null}
             </p>
           </div>
           <div
@@ -74,6 +75,7 @@ function CategoryScore({ category, value }) {
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={valid ? safeValue : undefined}
+            aria-valuetext={valid ? `${Number(value).toFixed(1)} out of 100` : 'Not available'}
           >
             {valid && (
               <div
@@ -151,16 +153,13 @@ export default function DashboardPage() {
   }, [loadDashboard, retryKey]);
 
   const categoryScores = dashboard?.category_scores || {};
-  const validCategories = categories.filter(
-    (category) =>
-      typeof categoryScores[category.key] === 'number' &&
-      Number.isFinite(categoryScores[category.key]),
-  );
+  const validCategories = categories.filter((category) => isNumericValue(categoryScores[category.key]));
   const score = dashboard?.overall_score;
-  const validScore = typeof score === 'number' && Number.isFinite(score);
-  const coverage = typeof dashboard?.confidence === 'number'
-    ? Math.round(dashboard.confidence * 100)
-    : null;
+  const validScore = isNumericValue(score);
+  const coverage =
+    typeof dashboard?.confidence === 'number' && Number.isFinite(dashboard.confidence)
+      ? Math.round(dashboard.confidence * 100)
+      : null;
 
   return (
     <PageWrapper
@@ -244,10 +243,18 @@ export default function DashboardPage() {
                 </div>
               </div>
               {validScore && (
-                <div className="mt-5 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                <div
+                  className="mt-5 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"
+                  role="progressbar"
+                  aria-label="Digital readiness score"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={clampScore(score)}
+                  aria-valuetext={`${Number(score).toFixed(1)} out of 100`}
+                >
                   <div
                     className={`h-full rounded-full ${scoreTone(score)}`}
-                    style={{ width: `${Math.max(0, Math.min(100, score))}%` }}
+                    style={{ width: `${clampScore(score)}%` }}
                   />
                 </div>
               )}

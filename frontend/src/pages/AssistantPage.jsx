@@ -72,8 +72,10 @@ export default function AssistantPage() {
   const inputRef = useRef(null);
 
   useEffect(() => {
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
     conversationEndRef.current?.scrollIntoView({
-      behavior: 'smooth',
+      behavior: reducedMotion ? 'auto' : 'smooth',
       block: 'end',
     });
   }, [messages, loading]);
@@ -137,7 +139,7 @@ export default function AssistantPage() {
       title="AI Assistant"
       subtitle="Assessment-aware guidance for your website"
     >
-      <Card className="flex h-[min(720px,calc(100dvh-12rem))] min-h-[420px] flex-col">
+      <Card className="flex h-[min(720px,calc(100dvh-11rem))] min-h-[440px] flex-col">
         <CardHeader
           title="Chat with WebIntel AI"
           subtitle={
@@ -179,25 +181,24 @@ export default function AssistantPage() {
           </div>
         )}
 
-        <div
-          className="mb-4 flex flex-wrap gap-2"
-          aria-label="Suggested questions"
-        >
-          {suggestions.map((suggestion) => (
-            <button
-              key={suggestion}
-              type="button"
-              disabled={loading || !AI_ASSISTANT_ENABLED}
-              onClick={() => sendMessage(suggestion)}
-              className="rounded-full border border-slate-200 px-3 py-2 text-left text-xs text-slate-600 transition hover:border-primary-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-            >
-              {suggestion}
-            </button>
-          ))}
-        </div>
+        {AI_ASSISTANT_ENABLED && (
+          <div className="mb-4 flex flex-wrap gap-2" aria-label="Suggested questions">
+            {suggestions.map((suggestion) => (
+              <button
+                key={suggestion}
+                type="button"
+                disabled={loading}
+                onClick={() => sendMessage(suggestion)}
+                className="min-h-9 rounded-full border border-slate-200 px-3 py-2 text-left text-xs text-slate-600 transition hover:border-primary-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div
-          className="flex-1 space-y-4 overflow-y-auto rounded-xl bg-slate-50 p-4 dark:bg-slate-800/50"
+          className="mb-4 flex-1 space-y-4 overflow-y-auto overscroll-contain rounded-xl bg-slate-50 p-4 dark:bg-slate-800/50"
           role="log"
           aria-label="Chat conversation"
           aria-live="polite"

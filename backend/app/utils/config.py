@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     DATABASE_URL: str = "postgresql://webintel:webintel@db:5432/webintel"
     GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.5-flash-lite"
     CORS_ORIGINS: list[str] = ["http://localhost:5173"]
     SECRET_KEY: str = "change-me-in-production"
     LOG_LEVEL: str = "INFO"

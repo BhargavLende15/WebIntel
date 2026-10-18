@@ -19,7 +19,7 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 
 function PageLoader() {
   return (
-    <main
+    <div
       className="flex min-h-[50vh] items-center justify-center bg-slate-50 dark:bg-slate-950"
       role="status"
       aria-live="polite"
@@ -31,7 +31,7 @@ function PageLoader() {
         />
         Loading WebIntel…
       </div>
-    </main>
+    </div>
   );
 }
 

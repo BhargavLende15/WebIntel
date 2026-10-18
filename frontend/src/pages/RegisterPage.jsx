@@ -37,11 +37,13 @@ export default function RegisterPage() {
       });
       navigate('/dashboard', { replace: true });
     } catch (err) {
+      const detail = err.response?.data?.detail;
       setError(
-        err.response?.data?.detail ||
-        (!err.response
-          ? 'Cannot reach the WebIntel API. Check that the backend is running.'
-          : 'Registration failed. Check your details or try signing in.')
+        typeof detail === 'string' && detail.trim() !== ''
+          ? detail
+          : err.response
+            ? 'Registration failed. Check your details or try signing in.'
+            : 'Cannot reach the WebIntel API. Check that the backend is running.',
       );
     } finally {
       setLoading(false);
@@ -49,7 +51,7 @@ export default function RegisterPage() {
   }
 
   const inputClass =
-    'w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white';
+    'w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 transition placeholder:text-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white';
 
   return (
     <Card className="w-full max-w-md">
@@ -62,7 +64,10 @@ export default function RegisterPage() {
 
       <form className="space-y-4" onSubmit={handleSubmit}>
         <div>
-          <label htmlFor="fullName" className="mb-1 block text-sm font-medium">
+          <label
+            htmlFor="fullName"
+            className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300"
+          >
             Full name
           </label>
           <input
@@ -79,7 +84,10 @@ export default function RegisterPage() {
         </div>
 
         <div>
-          <label htmlFor="registerEmail" className="mb-1 block text-sm font-medium">
+          <label
+            htmlFor="registerEmail"
+            className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300"
+          >
             Email
           </label>
           <input
@@ -96,7 +104,10 @@ export default function RegisterPage() {
         </div>
 
         <div>
-          <label htmlFor="registerPassword" className="mb-1 block text-sm font-medium">
+          <label
+            htmlFor="registerPassword"
+            className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300"
+          >
             Password
           </label>
           <input
@@ -115,7 +126,10 @@ export default function RegisterPage() {
         </div>
 
         <div>
-          <label htmlFor="confirmPassword" className="mb-1 block text-sm font-medium">
+          <label
+            htmlFor="confirmPassword"
+            className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300"
+          >
             Confirm password
           </label>
           <input
@@ -133,19 +147,25 @@ export default function RegisterPage() {
         </div>
 
         {error && (
-          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+          <p
+            role="alert"
+            className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
+          >
             {error}
           </p>
         )}
 
-        <Button className="w-full" type="submit" disabled={loading}>
-          {loading ? 'Creating account…' : 'Create account'}
+        <Button className="w-full" size="lg" type="submit" loading={loading}>
+          {loading ? 'Creating account' : 'Create account'}
         </Button>
       </form>
 
-      <p className="mt-5 text-center text-sm text-slate-500">
+      <p className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
         Already have an account?{' '}
-        <Link className="font-medium text-primary-600 hover:underline" to="/login">
+        <Link
+          className="font-medium text-primary-600 hover:underline dark:text-primary-400"
+          to="/login"
+        >
           Sign in
         </Link>
       </p>
