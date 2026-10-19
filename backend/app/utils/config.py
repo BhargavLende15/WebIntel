@@ -29,6 +29,13 @@ class Settings(BaseSettings):
     CRAWL_MAX_RUNTIME_SECONDS: int = 180
     USER_AGENT: str = "WebIntelBot/1.0 (+https://webintel.example.com/bot)"
 
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def normalize_database_url(cls, value: Any) -> str:
+        if isinstance(value, str) and value.startswith("postgres://"):
+            return value.replace("postgres://", "postgresql://", 1)
+        return value
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, value: Any) -> list[str]:

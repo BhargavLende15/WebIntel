@@ -1,0 +1,47 @@
+# Production-style stack: nginx frontend + API + PostgreSQL (e.g. VPS or local smoke test).
+# For Render, use render.yaml instead (static frontend + Docker API + managed Postgres).
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: webintel
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-webintel}
+      POSTGRES_DB: webintel
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U webintel -d webintel"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.backend.prod
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://webintel:${POSTGRES_PASSWORD:-webintel}@db:5432/webintel
+      DEBUG: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend.prod
+      args:
+        VITE_API_URL: /api/v1
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

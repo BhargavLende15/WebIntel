@@ -33,7 +33,13 @@ WebIntel is a production-quality platform that evaluates a website's overall **D
 | AI | Google Gemini API |
 | ML | Scikit-learn |
 | Analysis | BeautifulSoup, Playwright, Google Lighthouse |
-| Deployment | Docker, Docker Compose |
+| Deployment | Docker, Docker Compose, [Render](docs/DEPLOYMENT.md) |
+
+---
+
+## Production deployment
+
+See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for the recommended **Render** setup (PostgreSQL + Docker API + static frontend) and optional VPS instructions with `docker-compose.prod.yml`.
 
 ---
 
