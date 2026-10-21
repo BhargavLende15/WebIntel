@@ -1,4 +1,4 @@
-﻿from uuid import UUID
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -55,6 +55,8 @@ def _dashboard_response(
             detail="No persisted readiness score is available for this analysis.",
         )
 
+    website = db.get(Website, analysis.website_id)
+
     stored_scores = score.category_scores or {}
     category_scores = {
         name: stored_scores.get(name)
@@ -82,8 +84,6 @@ def _dashboard_response(
         if value is not None
     ]
 
-    # Trend is scoped to this website and includes only completed,
-    # scored assessments. Query newest first, then reverse for charting.
     recent_rows = (
         db.query(AnalysisResult, Score)
         .join(Score, Score.analysis_id == AnalysisResult.id)
@@ -111,7 +111,6 @@ def _dashboard_response(
         for item, item_score in recent_rows
     ]
 
-    # Category data is based on the persisted score for this analysis.
     bar = [
         {
             "category": CATEGORY_LABELS[name],
@@ -121,71 +120,58 @@ def _dashboard_response(
         if value is not None
     ]
 
-    # Count stored recommendations; do not manufacture issue counts.
     recommendations = (
         db.query(Recommendation)
         .filter(Recommendation.analysis_id == analysis.id)
         .all()
     )
     counts = {key: 0 for key in PRIORITY_LABELS}
-    for item in recommendations:
-        priority = (item.priority or "").strip().lower()
+    for recommendation in recommendations:
+        priority = recommendation.priority
         if priority in counts:
             counts[priority] += 1
 
     pie = [
-        {
-            "name": PRIORITY_LABELS[key],
-            "value": count,
-        }
-        for key, count in counts.items()
-        if count > 0
+        {"name": PRIORITY_LABELS[key], "value": counts[key]}
+        for key in ["critical", "high", "medium", "low"]
     ]
 
-    # Same persisted category measurements, exposed separately for
-    # area-style visualizations without introducing synthetic values.
-    area = [
-        {
-            "category": CATEGORY_LABELS[name],
-            "score": float(value),
-        }
-        for name, value in category_scores.items()
-        if value is not None
-    ]
+    charts = {
+        "radar": radar,
+        "line": line,
+        "bar": bar,
+        "pie": pie,
+    }
 
     return DashboardResponse(
         analysis_id=analysis.id,
         website_id=analysis.website_id,
-        overall_score=score.overall_score,
+        website_name=website.name if website else None,
+        website_url=website.url if website else None,
+        website_domain=website.domain if website else None,
+        overall_score=float(score.overall_score),
         grade=score.grade,
-        confidence=score.confidence,
+        confidence=float(score.confidence),
         explanation=score.explanation,
         category_scores=category_scores,
         metrics=metrics,
-        charts={
-            "radar": radar,
-            "line": line,
-            "bar": bar,
-            "pie": pie,
-            "area": area,
-        },
+        charts=charts,
     )
 
 
 @router.get("/latest", response_model=DashboardResponse)
-def get_latest_dashboard(
+async def get_latest_dashboard(
     db: Session = Depends(get_db_session),
     user: User = Depends(get_current_user),
 ) -> DashboardResponse:
     """Return dashboard data for the most recently completed analysis."""
     analysis = (
         db.query(AnalysisResult)
-        .join(Score, Score.analysis_id == AnalysisResult.id)
         .join(Website, AnalysisResult.website_id == Website.id)
         .join(Project, Website.project_id == Project.id)
         .filter(
-            AnalysisResult.status == "completed",
             Project.user_id == user.id,
+            AnalysisResult.status == "completed",
         )
         .order_by(
             AnalysisResult.completed_at.desc(),
@@ -197,17 +183,14 @@ def get_latest_dashboard(
     if analysis is None:
         raise HTTPException(
             status_code=404,
-            detail=(
-                "No completed website analysis with a persisted "
-                "score is available yet."
-            ),
+            detail="No completed analysis found for this account.",
         )
 
     return _dashboard_response(analysis, db)
 
 
 @router.get("/{analysis_id}", response_model=DashboardResponse)
-def get_dashboard(
+async def get_dashboard(
     analysis_id: UUID,
     db: Session = Depends(get_db_session),
     user: User = Depends(get_current_user),
@@ -215,4 +198,3 @@ def get_dashboard(
     """Retrieve dashboard data for a specific completed analysis."""
     analysis = get_owned_analysis_or_404(analysis_id, user, db)
     return _dashboard_response(analysis, db)
-

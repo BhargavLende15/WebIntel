@@ -62,3 +62,5 @@ export const generateReport = (payload) =>
 
 export { TOKEN_KEY };
 export default api;
+
+export const getWebsite = (id) => api.get(`/websites/${id}`);

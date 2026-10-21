@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import Card, { CardHeader } from '../components/ui/Card';
 import { PageWrapper } from '../layouts/MainLayout';
-import { getLatestDashboard } from '../services/api';
+import { getLatestDashboard, getWebsite } from '../services/api';
 import { clampScore, formatScore as formatScoreValue, isNumericValue } from '../utils/format';
 
 const categories = [
@@ -121,6 +121,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [retryKey, setRetryKey] = useState(0);
+  const [website, setWebsite] = useState(null);
 
   const loadDashboard = useCallback(async (activeRef) => {
     setLoading(true);
@@ -128,7 +129,18 @@ export default function DashboardPage() {
 
     try {
       const response = await getLatestDashboard();
-      if (activeRef.active) setDashboard(response.data);
+      if (activeRef.active) {
+        const data = response.data;
+        setDashboard(data);
+        if (data.website_id) {
+          try {
+            const w = await getWebsite(data.website_id);
+            if (activeRef.active) setWebsite(w.data);
+          } catch (e) {
+            // ignore
+          }
+        }
+      }
     } catch (err) {
       if (!activeRef.active) return;
 
@@ -174,6 +186,18 @@ export default function DashboardPage() {
           <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-3xl">
             Website readiness
           </h2>
+          {(website?.name || website?.url || dashboard?.website_name || dashboard?.website_url) && (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+              <span className="font-medium text-slate-900 dark:text-white">
+                {website?.name || dashboard?.website_name || website?.domain || dashboard?.website_domain || 'Website'}
+              </span>
+              {(website?.url || dashboard?.website_url) && (
+                <span className="text-slate-500 dark:text-slate-400 break-all">
+                  • {website?.url || dashboard?.website_url}
+                </span>
+              )}
+            </div>
+          )}
           <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
             Review your latest saved assessment and decide what to improve next.
           </p>
