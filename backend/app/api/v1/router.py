@@ -11,6 +11,7 @@ from app.api.v1 import (
     recommendations,
     reports,
     score,
+    websites,
 )
 
 api_router = APIRouter()
@@ -24,5 +25,6 @@ api_router.include_router(predict.router)
 api_router.include_router(monitor.router)
 api_router.include_router(history.router)
 api_router.include_router(reports.router)
+api_router.include_router(websites.router)
 
 api_router.include_router(auth.router)

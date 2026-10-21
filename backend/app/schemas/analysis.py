@@ -23,6 +23,9 @@ class AnalysisResponse(BaseModel):
 
     id: UUID
     website_id: UUID
+    website_name: str | None = None
+    website_url: str | None = None
+    website_domain: str | None = None
     status: str
     performance_data: dict | None = None
     seo_data: dict | None = None

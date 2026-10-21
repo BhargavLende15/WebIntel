@@ -4,7 +4,7 @@ import Button from '../components/ui/Button';
 import Card, { CardHeader } from '../components/ui/Card';
 import { SkeletonBlock } from '../components/ui/Skeleton';
 import { PageWrapper } from '../layouts/MainLayout';
-import { getSavedRecommendations } from '../services/api';
+import { getSavedRecommendations, getAnalysis, getWebsite } from '../services/api';
 import { NOT_AVAILABLE, formatDisplayValue, humanizeKey } from '../utils/format';
 
 const PRIORITIES = ['critical', 'high', 'medium', 'low'];
@@ -95,6 +95,7 @@ export default function RecommendationsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [retryKey, setRetryKey] = useState(0);
+  const [website, setWebsite] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -108,6 +109,16 @@ export default function RecommendationsPage() {
         if (active) {
           setItems(Array.isArray(data?.recommendations) ? data.recommendations : []);
         }
+        // try to get website info
+        try {
+          const a = await getAnalysis(id);
+          if (active && a.data?.website_id) {
+            try {
+              const w = await getWebsite(a.data.website_id);
+              if (active) setWebsite(w.data);
+            } catch (e) {}
+          }
+        } catch (e) {}
       } catch (err) {
         if (!active) return;
         const detail = err.response?.data?.detail;
@@ -131,6 +142,18 @@ export default function RecommendationsPage() {
 
   return (
     <PageWrapper title="Recommendations" subtitle={`Prioritized improvements for analysis ${id}`}>
+      {(website?.name || website?.url) && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+          <span className="font-medium text-slate-900 dark:text-white">
+            {website?.name || website?.domain || 'Website'}
+          </span>
+          {website?.url && (
+            <span className="text-slate-500 dark:text-slate-400 break-all">
+              • {website?.url}
+            </span>
+          )}
+        </div>
+      )}
       <div className="mb-6 flex flex-wrap gap-3">
         <Link to={`/results/${id}`}>
           <Button variant="outline">Back to results</Button>

@@ -4,7 +4,7 @@ import Button from '../components/ui/Button';
 import Card, { CardHeader } from '../components/ui/Card';
 import { SkeletonCard } from '../components/ui/Skeleton';
 import { PageWrapper } from '../layouts/MainLayout';
-import { calculateScore, getAnalysis, getRecommendations } from '../services/api';
+import { calculateScore, getAnalysis, getRecommendations, getWebsite } from '../services/api';
 import {
   BULLET,
   ELLIPSIS,
@@ -398,6 +398,7 @@ export default function ResultsPage() {
   const [scoreLoading, setScoreLoading] = useState(false);
   const [scoreError, setScoreError] = useState('');
   const [scoreAttempt, setScoreAttempt] = useState(0);
+  const [website, setWebsite] = useState(null);
   const timerRef = useRef(null);
 
   // Poll the analysis until it reaches a terminal state.
@@ -410,11 +411,20 @@ export default function ResultsPage() {
 
     const poll = () => {
       getAnalysis(id)
-        .then(({ data }) => {
+        .then(async ({ data }) => {
           if (!active) return;
 
           attempts += 1;
           setAnalysis(data ?? null);
+          const wid = data?.website_id;
+          if (wid) {
+            try {
+              const wres = await getWebsite(wid);
+              if (active) setWebsite(wres.data);
+            } catch (e) {
+              // ignore
+            }
+          }
           setLoading(false);
           setError('');
 
@@ -566,6 +576,19 @@ export default function ResultsPage() {
               </Button>
             </div>
           </Card>
+        )}
+
+        {(website?.name || website?.url || analysis?.website_name || analysis?.website_url) && (
+          <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+            <span className="font-medium text-slate-900 dark:text-white">
+              {website?.name || analysis?.website_name || website?.domain || analysis?.website_domain || 'Website'}
+            </span>
+            {(website?.url || analysis?.website_url) && (
+              <span className="text-slate-500 dark:text-slate-400 break-all">
+                • {website?.url || analysis?.website_url}
+              </span>
+            )}
+          </div>
         )}
 
         <div className="flex flex-wrap items-center gap-3">

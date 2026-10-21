@@ -4,7 +4,7 @@ import { useParams } from 'react-router-dom';
 import Button from '../components/ui/Button';
 import Card, { CardHeader } from '../components/ui/Card';
 import { PageWrapper } from '../layouts/MainLayout';
-import { sendChatMessage } from '../services/api';
+import { sendChatMessage, getAnalysis, getWebsite } from '../services/api';
 
 // AI stays disabled until a provider is configured intentionally.
 // Enable later by setting VITE_AI_ASSISTANT_ENABLED=true.
@@ -67,9 +67,37 @@ export default function AssistantPage() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState(null);
+  const [website, setWebsite] = useState(null);
 
   const conversationEndRef = useRef(null);
   const inputRef = useRef(null);
+
+  useEffect(() => {
+    let active = true;
+    async function loadWebsite() {
+      if (!id) return;
+      try {
+        const a = await getAnalysis(id);
+        const data = a?.data || a;
+        const wid = data?.website_id;
+        if (wid && active) {
+          try {
+            const w = await getWebsite(wid);
+            if (active) {
+              const wd = w?.data || w;
+              setWebsite(wd);
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+      } catch (e) {
+        // ignore - don't break UI
+      }
+    }
+    loadWebsite();
+    return () => { active = false; };
+  }, [id]);
 
   useEffect(() => {
     const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -139,6 +167,18 @@ export default function AssistantPage() {
       title="AI Assistant"
       subtitle="Assessment-aware guidance for your website"
     >
+      {(website?.name || website?.url) && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+          <span className="font-medium text-slate-900 dark:text-white">
+            {website?.name || website?.domain || 'Website'}
+          </span>
+          {website?.url && (
+            <span className="text-slate-500 dark:text-slate-400">
+              • {website?.url}
+            </span>
+          )}
+        </div>
+      )}
       <Card className="flex h-[min(720px,calc(100dvh-11rem))] min-h-[440px] flex-col">
         <CardHeader
           title="Chat with WebIntel AI"
